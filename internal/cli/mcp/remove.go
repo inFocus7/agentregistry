@@ -3,6 +3,7 @@ package mcp
 import (
 	"fmt"
 
+	"github.com/agentregistry-dev/agentregistry/internal/cli/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -17,15 +18,16 @@ var RemoveCmd = &cobra.Command{
 }
 
 func runRemove(cmd *cobra.Command, args []string) error {
-	serverName := args[0]
-
-	if apiClient == nil {
-		return fmt.Errorf("API client not initialized")
+	apiClient, err := utils.EnsureRegistryConnection()
+	if err != nil {
+		return err
 	}
+
+	serverName := args[0]
 
 	// Remove server via API (server will handle reconciliation)
 	fmt.Printf("Removing %s from deployments...\n", serverName)
-	err := apiClient.RemoveServer(serverName)
+	err = apiClient.RemoveServer(serverName)
 	if err != nil {
 		return fmt.Errorf("failed to remove server: %w", err)
 	}

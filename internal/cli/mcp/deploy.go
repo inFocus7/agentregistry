@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/agentregistry-dev/agentregistry/internal/cli/utils"
+	"github.com/agentregistry-dev/agentregistry/internal/client"
 	v0 "github.com/modelcontextprotocol/registry/pkg/api/v0"
 	"github.com/spf13/cobra"
 )
@@ -39,11 +41,12 @@ func init() {
 }
 
 func runDeploy(cmd *cobra.Command, args []string) error {
-	serverName := args[0]
-
-	if apiClient == nil {
-		return fmt.Errorf("API client not initialized")
+	apiClient, err := utils.EnsureRegistryConnection()
+	if err != nil {
+		return err
 	}
+
+	serverName := args[0]
 
 	config := make(map[string]string)
 
@@ -71,7 +74,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		config["HEADER_"+parts[0]] = parts[1]
 	}
 
-	server, err := selectServerVersion(serverName, deployVersion, deployYes)
+	server, err := selectServerVersion(apiClient, serverName, deployVersion, deployYes)
 	if err != nil {
 		return err
 	}
@@ -95,7 +98,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 
 // selectServerVersion handles server version selection logic with interactive prompts
 // Returns the selected server or an error if not found or cancelled
-func selectServerVersion(resourceName, requestedVersion string, autoYes bool) (*v0.ServerResponse, error) {
+func selectServerVersion(apiClient *client.Client, resourceName, requestedVersion string, autoYes bool) (*v0.ServerResponse, error) {
 	if apiClient == nil {
 		return nil, fmt.Errorf("API client not initialized")
 	}

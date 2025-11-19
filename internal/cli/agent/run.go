@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/agentregistry-dev/agentregistry/internal/cli/utils"
 	kagentcli "github.com/kagent-dev/kagent/go/cli/cli/agent"
 	kagentconfig "github.com/kagent-dev/kagent/go/cli/config"
 	"github.com/spf13/cobra"
@@ -44,6 +45,12 @@ func runRun(cmd *cobra.Command, args []string) error {
 			os.Exit(1)
 		}
 	} else {
+		// Connect to registry first
+		apiClient, err := utils.EnsureRegistryConnection()
+		if err != nil {
+			return err
+		}
+
 		// Assume this is an agent name from the registry
 		agentModel, err := apiClient.GetAgentByName(link)
 		if err != nil {

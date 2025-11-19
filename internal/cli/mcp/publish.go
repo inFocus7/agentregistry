@@ -10,11 +10,14 @@ import (
 
 	"github.com/agentregistry-dev/agentregistry/internal/cli/mcp/build"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/mcp/manifest"
+	"github.com/agentregistry-dev/agentregistry/internal/cli/utils"
 	"github.com/agentregistry-dev/agentregistry/internal/printer"
 	apiv0 "github.com/modelcontextprotocol/registry/pkg/api/v0"
 	"github.com/modelcontextprotocol/registry/pkg/model"
 	"github.com/spf13/cobra"
 )
+
+// TODO(infocus7): Maybe dry-run flag would make apiClient optional? (since we wouldn't require it to be running in this case, and maybe a user does not have everything set up but wants to test the publish command)
 
 var (
 	// Flags for mcp publish command
@@ -36,6 +39,11 @@ The mcp server folder must contain an mcp.yaml file.`,
 }
 
 func runMCPServerPublish(cmd *cobra.Command, args []string) error {
+	apiClient, err := utils.EnsureRegistryConnection()
+	if err != nil {
+		return err
+	}
+
 	serverPath := args[0]
 
 	// Validate path exists
@@ -105,7 +113,6 @@ func runMCPServerPublish(cmd *cobra.Command, args []string) error {
 			pushCmd.Stderr = os.Stderr
 			if err := pushCmd.Run(); err != nil {
 				return fmt.Errorf("docker push failed for %s: %w", imageRef, err)
-
 			}
 		}
 	}
