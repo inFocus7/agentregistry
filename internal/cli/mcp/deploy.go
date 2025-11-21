@@ -83,7 +83,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("server not found: %s", serverName)
 	}
 
-	isPublished, err := isServerPublished(serverName, deployVersion)
+	isPublished, err := isServerPublished(apiClient, serverName, deployVersion)
 	if err != nil {
 		return fmt.Errorf("failed to check if server is published: %w", err)
 	}

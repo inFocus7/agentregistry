@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/agentregistry-dev/agentregistry/internal/cli/utils"
+	"github.com/agentregistry-dev/agentregistry/internal/client"
 	"github.com/agentregistry-dev/agentregistry/internal/models"
 	"github.com/spf13/cobra"
 )
@@ -46,7 +47,7 @@ func runUnpublish(cmd *cobra.Command, args []string) error {
 
 	// If --all flag is set, unpublish all versions
 	if unpublishAll {
-		return unpublishAllVersions(skillName)
+		return unpublishAllVersions(apiClient, skillName)
 	}
 
 	if unpublishVersion == "" {
@@ -97,7 +98,7 @@ func runUnpublish(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func unpublishAllVersions(skillName string) error {
+func unpublishAllVersions(apiClient *client.Client, skillName string) error {
 	fmt.Printf("Fetching all versions of %s...\n", skillName)
 
 	// Get all versions of the skill

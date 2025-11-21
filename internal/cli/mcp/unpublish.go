@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/agentregistry-dev/agentregistry/internal/cli/utils"
+	"github.com/agentregistry-dev/agentregistry/internal/client"
 	"github.com/spf13/cobra"
 )
 
@@ -53,7 +54,7 @@ func runUnpublish(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check if the server with the specific version is even published
-	isPublished, _ := isServerPublished(serverName, unpublishVersion)
+	isPublished, _ := isServerPublished(apiClient, serverName, unpublishVersion)
 	if !isPublished {
 		return fmt.Errorf("server %s version %s is not published", serverName, unpublishVersion)
 	}

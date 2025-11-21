@@ -11,6 +11,7 @@ import (
 	"github.com/agentregistry-dev/agentregistry/internal/cli/mcp/build"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/mcp/manifest"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/utils"
+	"github.com/agentregistry-dev/agentregistry/internal/client"
 	"github.com/agentregistry-dev/agentregistry/internal/printer"
 	apiv0 "github.com/modelcontextprotocol/registry/pkg/api/v0"
 	"github.com/modelcontextprotocol/registry/pkg/model"
@@ -86,7 +87,7 @@ func publishExistingServer(apiClient *client.Client, serverName string, version 
 	// If the specific version is not found, we should return an error.
 	// Once found, we need to check if it's already published.
 
-	isPublished, err := isServerPublished(serverName, version)
+	isPublished, err := isServerPublished(apiClient, serverName, version)
 	if err != nil {
 		return fmt.Errorf("failed to check if server is published: %w", err)
 	}

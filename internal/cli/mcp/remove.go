@@ -37,14 +37,14 @@ func runRemove(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("version is required")
 	}
 
-	isDeployed, _ := isServerDeployed(serverName, removeVersion)
+	isDeployed, _ := isServerDeployed(apiClient, serverName, removeVersion)
 	if !isDeployed {
 		return fmt.Errorf("server %s version %s is not deployed", serverName, removeVersion)
 	}
 
 	// Remove server via API (server will handle reconciliation)
 	fmt.Printf("Removing %s from deployments...\n", serverName)
-	err := apiClient.RemoveServer(serverName, removeVersion)
+	err = apiClient.RemoveServer(serverName, removeVersion)
 	if err != nil {
 		return fmt.Errorf("failed to remove server %s version %s: %w", serverName, removeVersion, err)
 	}
