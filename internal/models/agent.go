@@ -3,7 +3,7 @@ package models
 import (
 	"time"
 
-	"github.com/kagent-dev/kagent/go/cli/agent/frameworks/common"
+	"github.com/agentregistry-dev/agentregistry/internal/cli/agent/frameworks/common"
 	"github.com/modelcontextprotocol/registry/pkg/model"
 )
 
@@ -34,6 +34,7 @@ type AgentRegistryExtensions struct {
 	PublishedAt time.Time `json:"publishedAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 	IsLatest    bool      `json:"isLatest"`
+	Published   bool      `json:"published"`
 }
 
 type AgentResponseMeta struct {

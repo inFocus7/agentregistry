@@ -30,4 +30,5 @@ func init() {
 	McpCmd.AddCommand(ListCmd)
 	McpCmd.AddCommand(RunCmd)
 	McpCmd.AddCommand(ShowCmd)
+	McpCmd.AddCommand(UnpublishCmd)
 }
