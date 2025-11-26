@@ -171,3 +171,92 @@ func extractEnvVarsFromHeaders(servers []common.McpServerType) []string {
 	sort.Strings(envs)
 	return envs
 }
+
+// mcpTarget represents an MCP server target for config.yaml template.
+type mcpTarget struct {
+	Name  string
+	Cmd   string
+	Args  []string
+	Env   []string
+	Image string
+	Build string
+}
+
+// EnsureMcpServerDirectories creates config.yaml and Dockerfile for command-type MCP servers.
+func EnsureMcpServerDirectories(projectDir string, manifest *common.AgentManifest, verbose bool) error {
+	if manifest == nil {
+		return nil
+	}
+
+	gen := python.NewPythonGenerator()
+
+	for _, srv := range manifest.McpServers {
+		// Skip remote type servers as they don't need local directories
+		if srv.Type != "command" {
+			continue
+		}
+
+		// Create directory named after the MCP server
+		mcpServerDir := filepath.Join(projectDir, srv.Name)
+		if err := os.MkdirAll(mcpServerDir, 0o755); err != nil {
+			return fmt.Errorf("failed to create %s directory: %w", srv.Name, err)
+		}
+
+		// Transform this specific server into a target for config.yaml template
+		targets := []mcpTarget{
+			{
+				Name:  srv.Name,
+				Cmd:   srv.Command,
+				Args:  srv.Args,
+				Env:   srv.Env,
+				Image: srv.Image,
+				Build: srv.Build,
+			},
+		}
+
+		// Render and write config.yaml
+		templateData := struct {
+			Targets []mcpTarget
+		}{
+			Targets: targets,
+		}
+
+		configTemplateBytes, err := gen.ReadTemplateFile("mcp_server/config.yaml.tmpl")
+		if err != nil {
+			return fmt.Errorf("failed to read config.yaml template for %s: %w", srv.Name, err)
+		}
+
+		renderedContent, err := gen.RenderTemplate(string(configTemplateBytes), templateData)
+		if err != nil {
+			return fmt.Errorf("failed to render config.yaml template for %s: %w", srv.Name, err)
+		}
+
+		configPath := filepath.Join(mcpServerDir, "config.yaml")
+		if err := os.WriteFile(configPath, []byte(renderedContent), 0o644); err != nil {
+			return fmt.Errorf("failed to write config.yaml for %s: %w", srv.Name, err)
+		}
+
+		if verbose {
+			fmt.Printf("Created/updated %s\n", configPath)
+		}
+
+		// Copy Dockerfile if it doesn't exist
+		dockerfilePath := filepath.Join(mcpServerDir, "Dockerfile")
+		if _, err := os.Stat(dockerfilePath); os.IsNotExist(err) {
+			dockerfileBytes, err := gen.ReadTemplateFile("mcp_server/Dockerfile")
+			if err != nil {
+				return fmt.Errorf("failed to read Dockerfile template for %s: %w", srv.Name, err)
+			}
+
+			if err := os.WriteFile(dockerfilePath, dockerfileBytes, 0o644); err != nil {
+				return fmt.Errorf("failed to write Dockerfile for %s: %w", srv.Name, err)
+			}
+
+			if verbose {
+				fmt.Printf("Created %s\n", dockerfilePath)
+			}
+		}
+	}
+
+	return nil
+}
