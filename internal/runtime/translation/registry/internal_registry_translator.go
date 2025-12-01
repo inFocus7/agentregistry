@@ -10,12 +10,11 @@ import (
 
 	"github.com/agentregistry-dev/agentregistry/internal/models"
 	"github.com/agentregistry-dev/agentregistry/internal/runtime/translation/api"
-	"github.com/agentregistry-dev/agentregistry/internal/runtime/translation/registry/utils"
-	"github.com/modelcontextprotocol/registry/pkg/model"
+	registryutils "github.com/agentregistry-dev/agentregistry/internal/runtime/translation/registry/utils"
 	"github.com/agentregistry-dev/agentregistry/internal/utils"
+	"github.com/modelcontextprotocol/registry/pkg/model"
 
 	apiv0 "github.com/modelcontextprotocol/registry/pkg/api/v0"
-	"github.com/modelcontextprotocol/registry/pkg/model"
 )
 
 type MCPServerRunRequest struct {
@@ -123,7 +122,7 @@ func translateRemoteMCPServer(
 	remoteInfo := registryServer.Remotes[0]
 
 	// Process headers using shared utility
-	headersMap, err := utils.ProcessHeaders(remoteInfo.Headers, headerValues, registryServer.Name)
+	headersMap, err := registryutils.ProcessHeaders(remoteInfo.Headers, headerValues, registryServer.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -174,17 +173,17 @@ func translateLocalMCPServer(
 	}
 
 	// Process runtime arguments first
-	args = utils.ProcessArguments(args, packageInfo.RuntimeArguments, argValues)
+	args = registryutils.ProcessArguments(args, packageInfo.RuntimeArguments, argValues)
 	addProcessedArgs(packageInfo.RuntimeArguments)
 
 	// Determine image and command based on registry type
-	config, args, err := utils.GetRegistryConfig(packageInfo.RegistryType, packageInfo.RunTimeHint, packageInfo.Identifier, args)
+	config, args, err := registryutils.GetRegistryConfig(packageInfo.RegistryType, packageInfo.RunTimeHint, packageInfo.Identifier, args)
 	if err != nil {
 		return nil, err
 	}
 
 	// Process package arguments after the package identifier
-	args = utils.ProcessArguments(args, packageInfo.PackageArguments, argValues)
+	args = registryutils.ProcessArguments(args, packageInfo.PackageArguments, argValues)
 	addProcessedArgs(packageInfo.PackageArguments)
 
 	// Add any extra args that weren't in the spec
@@ -206,7 +205,7 @@ func translateLocalMCPServer(
 
 	// Process environment variables using shared utility
 	// The function returns a map with all processed env vars, including defaults
-	processedEnvVars, err := utils.ProcessEnvironmentVariables(packageInfo.EnvironmentVariables, envValues, registryServer.Name)
+	processedEnvVars, err := registryutils.ProcessEnvironmentVariables(packageInfo.EnvironmentVariables, envValues, registryServer.Name)
 	if err != nil {
 		return nil, err
 	}
