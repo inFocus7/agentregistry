@@ -183,9 +183,23 @@ type mcpTarget struct {
 }
 
 // EnsureMcpServerDirectories creates config.yaml and Dockerfile for command-type MCP servers.
+// For registry-resolved servers, srv.Build contains the folder path (e.g., "registry/<name>").
+// For locally-defined servers, srv.Build is empty and srv.Name is used as the folder.
 func EnsureMcpServerDirectories(projectDir string, manifest *common.AgentManifest, verbose bool) error {
 	if manifest == nil {
 		return nil
+	}
+
+	// Clean up registry/ folder to ensure fresh state for registry-resolved servers.
+	// This prevents stale configs from previous runs with different registry servers.
+	registryDir := filepath.Join(projectDir, "registry")
+	if _, err := os.Stat(registryDir); err == nil {
+		if err := os.RemoveAll(registryDir); err != nil {
+			return fmt.Errorf("failed to clean up registry directory: %w", err)
+		}
+		if verbose {
+			fmt.Println("Cleaned up registry/ folder for fresh server configs")
+		}
 	}
 
 	gen := python.NewPythonGenerator()
@@ -196,10 +210,17 @@ func EnsureMcpServerDirectories(projectDir string, manifest *common.AgentManifes
 			continue
 		}
 
-		// Create directory named after the MCP server
-		mcpServerDir := filepath.Join(projectDir, srv.Name)
+		// Determine the directory path:
+		// - For registry-resolved servers: srv.Build contains the path (e.g., "registry/pokemon")
+		// - For locally-defined servers: use srv.Name as the folder name
+		folderPath := srv.Name
+		if srv.Build != "" {
+			folderPath = srv.Build
+		}
+
+		mcpServerDir := filepath.Join(projectDir, folderPath)
 		if err := os.MkdirAll(mcpServerDir, 0o755); err != nil {
-			return fmt.Errorf("failed to create %s directory: %w", srv.Name, err)
+			return fmt.Errorf("failed to create %s directory: %w", folderPath, err)
 		}
 
 		// Transform this specific server into a target for config.yaml template
@@ -240,9 +261,10 @@ func EnsureMcpServerDirectories(projectDir string, manifest *common.AgentManifes
 			fmt.Printf("Created/updated %s\n", configPath)
 		}
 
-		// Copy Dockerfile if it doesn't exist
+		// Copy Dockerfile if it doesn't exist (always overwrite for registry-resolved servers to ensure fresh state)
 		dockerfilePath := filepath.Join(mcpServerDir, "Dockerfile")
-		if _, err := os.Stat(dockerfilePath); os.IsNotExist(err) {
+		isRegistryServer := srv.Build != "" && strings.HasPrefix(srv.Build, "registry/")
+		if isRegistryServer || !fileExists(dockerfilePath) {
 			dockerfileBytes, err := gen.ReadTemplateFile("mcp_server/Dockerfile")
 			if err != nil {
 				return fmt.Errorf("failed to read Dockerfile template for %s: %w", srv.Name, err)
@@ -259,4 +281,10 @@ func EnsureMcpServerDirectories(projectDir string, manifest *common.AgentManifes
 	}
 
 	return nil
+}
+
+// fileExists checks if a file exists at the given path.
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }

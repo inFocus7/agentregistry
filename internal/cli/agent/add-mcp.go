@@ -81,11 +81,11 @@ func addMcpCmd(name string) error {
 			}
 		} else if registryURL != "" && registryName != "" {
 			res = common.McpServerType{
-				Type:         "registry",
-				Name:         name,
-				RegistryURL:  registryURL,
-				RegistryName: registryName,
-				Version:      registryVersion,
+				Type:            "registry",
+				Name:            name,
+				RegistryURL:     registryURL,
+				RegistryName:    registryName,
+				RegistryVersion: registryVersion,
 			}
 		} else {
 			if image != "" && build != "" {

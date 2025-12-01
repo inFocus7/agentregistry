@@ -33,7 +33,7 @@ services:
   {{.Name}}:
     image: localhost:5001/{{$.Name}}-{{.Name}}:latest
     build:
-      context: ./{{.Name}}
+      context: ./{{if .Build}}{{.Build}}{{else}}{{.Name}}{{end}}
       dockerfile: Dockerfile
     expose:
       - "3000"

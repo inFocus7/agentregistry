@@ -17,6 +17,9 @@ import (
 	"github.com/agentregistry-dev/agentregistry/internal/cli/agent/frameworks/common"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/agent/project"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/agent/tui"
+	"github.com/agentregistry-dev/agentregistry/internal/cli/agent/utils"
+	"github.com/agentregistry-dev/agentregistry/internal/registry"
+	"github.com/modelcontextprotocol/registry/pkg/model"
 	"github.com/spf13/cobra"
 	a2aclient "trpc.group/trpc-go/trpc-a2a-go/client"
 	"trpc.group/trpc-go/trpc-a2a-go/protocol"
@@ -65,6 +68,23 @@ func runFromDirectory(ctx context.Context, projectDir string) error {
 		return fmt.Errorf("failed to load agent.yaml: %w", err)
 	}
 
+	servers, err := parseAgentManifestServers(manifest)
+	if err != nil {
+		return fmt.Errorf("failed to parse agent manifest mcp servers: %w", err)
+	}
+	manifest.McpServers = servers
+
+	// Create config.yaml + Dockerfile for all command-type servers (including registry-resolved)
+	// For registry-resolved servers, srv.Build is set to "registry/<name>" so they go in registry/ subfolder
+	if err := project.EnsureMcpServerDirectories(projectDir, manifest, verbose); err != nil {
+		return fmt.Errorf("failed to create MCP server directories: %w", err)
+	}
+
+	// Regenerate mcp_tools.py with the resolved servers so the agent knows how to connect
+	if err := project.RegenerateMcpTools(projectDir, manifest, verbose); err != nil {
+		return fmt.Errorf("failed to regenerate mcp_tools.py: %w", err)
+	}
+
 	if err := project.RegenerateDockerCompose(projectDir, manifest, verbose); err != nil {
 		return fmt.Errorf("failed to refresh docker-compose.yaml: %w", err)
 	}
@@ -81,11 +101,9 @@ func runFromDirectory(ctx context.Context, projectDir string) error {
 	})
 }
 
-// TODO(infocus7): When running here, the AgentManifest will have registry MCP servers, so we would translate that for the runtime.
-// We'll need to: 1. Fetch servers from registry url; 2. Parse the list of servers to get the correct one (check if an endpoint for this exists); 3. look up the startup parameters (commands, args, env, etc.); 4. set up folder for it; 5. update docker-compose to run the server; 6. update manifest to replace the remote with new command; 7. run agent
-// Would need to be done in a way that doesn't break the agent -- aka running `run` multiple times does not conflict with a previous run's resolution, running deploy & run any number of times keeps agent.yaml intact, and the docker-compose clean (avoiding future run/deploy conflicting writing data)
-// This isn't an issue during `add-mcp` because that is done per-mcp added, but for registry-based servers, a run/deploy call can be done any number of times, so writing & managing manifests could get tricky.
-// Unsure about on-deploy until that gets ported/implemented.
+// runFromManifest runs an agent from an already-resolved manifest.
+// If overrides is provided (from runFromDirectory), registry servers are already resolved.
+// If overrides is nil (from registry agent name), we resolve and render in-memory.
 func runFromManifest(ctx context.Context, manifest *common.AgentManifest, overrides *runContext) error {
 	if manifest == nil {
 		return fmt.Errorf("agent manifest is required")
@@ -95,11 +113,17 @@ func runFromManifest(ctx context.Context, manifest *common.AgentManifest, overri
 	workDir := ""
 
 	if overrides != nil {
+		// Called from runFromDirectory - servers already resolved, compose already generated
 		composeData = overrides.composeData
 		workDir = overrides.workDir
-	}
+	} else {
+		// Called with registry agent name - need to resolve and render in-memory
+		servers, err := parseAgentManifestServers(manifest)
+		if err != nil {
+			return fmt.Errorf("failed to parse agent manifest mcp servers: %w", err)
+		}
+		manifest.McpServers = servers
 
-	if composeData == nil {
 		data, err := renderComposeFromManifest(manifest)
 		if err != nil {
 			return err
@@ -108,6 +132,73 @@ func runFromManifest(ctx context.Context, manifest *common.AgentManifest, overri
 	}
 
 	return runAgent(ctx, composeData, manifest, workDir)
+}
+
+func parseAgentManifestServers(manifest *common.AgentManifest) ([]common.McpServerType, error) {
+	servers := []common.McpServerType{}
+
+	for _, mcpServer := range manifest.McpServers {
+		switch mcpServer.Type {
+		case "registry":
+			// Fetch server spec from registry and translate to command/remote type
+			translatedServer, err := resolveRegistryServer(mcpServer)
+			if err != nil {
+				return nil, fmt.Errorf("failed to resolve registry server %q: %w", mcpServer.Name, err)
+			}
+			servers = append(servers, *translatedServer)
+		default:
+			servers = append(servers, mcpServer)
+		}
+	}
+
+	return servers, nil
+}
+
+// resolveRegistryServer fetches a server from the registry and translates it to a runnable config
+func resolveRegistryServer(mcpServer common.McpServerType) (*common.McpServerType, error) {
+	registryURL := mcpServer.RegistryURL
+	if registryURL == "" {
+		registryURL = "http://localhost:12121"
+	}
+
+	client := registry.NewClient()
+	serverEntry, err := client.FetchServer(registryURL, mcpServer.RegistryName, mcpServer.RegistryVersion)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch server %q from registry: %w", mcpServer.RegistryName, err)
+	}
+
+	// Collect environment variable overrides from the current environment
+	// This allows users to set required env vars before running
+	envOverrides := collectEnvOverrides(serverEntry.Server.Packages)
+
+	// Translate the registry server spec to a runnable McpServerType
+	translated, err := utils.TranslateRegistryServer(&serverEntry.Server, mcpServer.Name, envOverrides)
+	if err != nil {
+		return nil, err
+	}
+
+	if verbose {
+		fmt.Printf("Resolved registry server %q (%s) -> %s (image: %s, command: %s)\n",
+			mcpServer.RegistryName, serverEntry.Server.Version, translated.Type, translated.Image, translated.Command)
+	}
+
+	return translated, nil
+}
+
+// collectEnvOverrides gathers environment variable values from the current environment
+// for any env vars defined in the package specs
+func collectEnvOverrides(packages []model.Package) map[string]string {
+	overrides := make(map[string]string)
+
+	for _, pkg := range packages {
+		for _, envVar := range pkg.EnvironmentVariables {
+			if value := os.Getenv(envVar.Name); value != "" {
+				overrides[envVar.Name] = value
+			}
+		}
+	}
+
+	return overrides
 }
 
 type runContext struct {

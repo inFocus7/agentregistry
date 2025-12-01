@@ -6,8 +6,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
+	"github.com/modelcontextprotocol/registry/pkg/model"
 	"github.com/schollz/progressbar/v3"
 )
 
@@ -31,24 +33,15 @@ type ServerEntry struct {
 
 // ServerSpec represents the server specification
 type ServerSpec struct {
-	Name        string              `json:"name"`
-	Title       string              `json:"title"`
-	Description string              `json:"description"`
-	Version     string              `json:"version"`
-	Status      string              `json:"status"`
-	WebsiteURL  string              `json:"websiteUrl"`
-	Repository  Repository          `json:"repository"`
-	Packages    []ServerPackageInfo `json:"packages"`
-}
-
-// ServerPackageInfo represents package information from the server spec
-type ServerPackageInfo struct {
-	RegistryType string `json:"registryType"`
-	Identifier   string `json:"identifier"`
-	Version      string `json:"version"`
-	Transport    struct {
-		Type string `json:"type"`
-	} `json:"transport"`
+	Name        string            `json:"name"`
+	Title       string            `json:"title"`
+	Description string            `json:"description"`
+	Version     string            `json:"version"`
+	Status      string            `json:"status"`
+	WebsiteURL  string            `json:"websiteUrl"`
+	Repository  Repository        `json:"repository"`
+	Packages    []model.Package   `json:"packages"`
+	Remotes     []model.Transport `json:"remotes"`
 }
 
 // Repository represents the repository information
@@ -198,4 +191,45 @@ func (c *Client) FetchAllServers(baseURL string, opts FetchOptions) ([]ServerEnt
 	}
 
 	return allServers, nil
+}
+
+// FetchServer fetches a server by name and (optionally) version
+// If version is empty, it will fetch the latest version
+func (c *Client) FetchServer(baseURL string, name string, version string) (*ServerEntry, error) {
+	// Construct the endpoint: /v0/servers/{serverName}/versions/{version}
+	baseURL = strings.TrimSuffix(baseURL, "/")
+	if !strings.HasSuffix(baseURL, "/v0/servers") {
+		baseURL = baseURL + "/v0/servers"
+	}
+
+	if version == "" {
+		version = "latest"
+	}
+
+	encodedName := url.PathEscape(name)
+	fetchURL := fmt.Sprintf("%s/%s/versions/%s", baseURL, encodedName, version)
+
+	resp, err := c.HTTPClient.Get(fetchURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch server by name: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// Check HTTP status code before attempting to decode
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("unexpected status code %d: %s", resp.StatusCode, string(body))
+	}
+
+	var registryResp RegistryResponse
+	if err := json.NewDecoder(resp.Body).Decode(&registryResp); err != nil {
+		return nil, fmt.Errorf("failed to decode server list response: %w", err)
+	}
+
+	if len(registryResp.Servers) == 0 {
+		return nil, fmt.Errorf("server not found: %s with version %s", name, version)
+	}
+
+	// based on name + version, there should only be one server
+	return &registryResp.Servers[0], nil
 }
