@@ -171,6 +171,7 @@ func GetRegistryConfig(
 	registryType string,
 	runtimeHint string,
 	identifier string,
+	version string,
 	args []string,
 ) (RegistryConfig, []string, error) {
 	var config RegistryConfig
@@ -189,7 +190,12 @@ func GetRegistryConfig(
 		if !slices.Contains(args, "-y") {
 			args = append(args, "-y")
 		}
-		args = append(args, identifier)
+		// Append identifier with version if specified
+		if version != "" {
+			args = append(args, identifier+"@"+version)
+		} else {
+			args = append(args, identifier)
+		}
 
 	case strings.ToLower(string(model.RegistryTypePyPI)):
 		config.Image = "ghcr.io/astral-sh/uv:debian"
@@ -197,7 +203,12 @@ func GetRegistryConfig(
 		if config.Command == "" {
 			config.Command = "uvx"
 		}
-		args = append(args, identifier)
+		// Append identifier with version if specified
+		if version != "" {
+			args = append(args, identifier+"=="+version)
+		} else {
+			args = append(args, identifier)
+		}
 
 	case strings.ToLower(string(model.RegistryTypeOCI)):
 		// For OCI, the identifier IS the image

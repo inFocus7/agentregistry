@@ -69,6 +69,12 @@ func (c *Client) FetchAllServers(baseURL string, opts FetchOptions) ([]types.Ser
 	pageCount := 0
 	const pageLimit = 100
 
+	// Construct the endpoint: /v0/servers
+	baseURL = strings.TrimSuffix(baseURL, "/")
+	if !strings.HasSuffix(baseURL, "/v0/servers") {
+		baseURL = baseURL + "/v0/servers"
+	}
+
 	// First, get the total count estimate for progress bar
 	var bar *progressbar.ProgressBar
 	if opts.ShowProgress {
@@ -195,4 +201,35 @@ func (c *Client) FetchServer(baseURL string, name string, version string) (*type
 
 	// based on name + version, there should only be one server
 	return &registryResp.Servers[0], nil
+}
+
+// FetchServerVersions fetches all versions for a specific server
+func (c *Client) FetchServerVersions(baseURL string, serverName string) ([]types.ServerEntry, error) {
+	// Construct the endpoint: /v0/servers/{serverName}/versions
+	baseURL = strings.TrimSuffix(baseURL, "/")
+	if !strings.HasSuffix(baseURL, "/v0/servers") {
+		baseURL = baseURL + "/v0/servers"
+	}
+
+	encodedName := url.PathEscape(serverName)
+	fetchURL := fmt.Sprintf("%s/%s/versions", baseURL, encodedName)
+
+	resp, err := c.HTTPClient.Get(fetchURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch server versions: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// Check HTTP status code before attempting to decode
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("unexpected status code %d: %s", resp.StatusCode, string(body))
+	}
+
+	var registryResp types.RegistryResponse
+	if err := json.NewDecoder(resp.Body).Decode(&registryResp); err != nil {
+		return nil, fmt.Errorf("failed to decode server versions response: %w", err)
+	}
+
+	return registryResp.Servers, nil
 }

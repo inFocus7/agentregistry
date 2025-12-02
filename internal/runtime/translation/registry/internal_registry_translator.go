@@ -178,7 +178,7 @@ func translateLocalMCPServer(
 	addProcessedArgs(packageInfo.RuntimeArguments)
 
 	// Determine image and command based on registry type
-	config, args, err := registryutils.GetRegistryConfig(packageInfo.RegistryType, packageInfo.RunTimeHint, packageInfo.Identifier, args)
+	config, args, err := registryutils.GetRegistryConfig(packageInfo.RegistryType, packageInfo.RunTimeHint, packageInfo.Identifier, packageInfo.Version, args)
 	if err != nil {
 		return nil, err
 	}

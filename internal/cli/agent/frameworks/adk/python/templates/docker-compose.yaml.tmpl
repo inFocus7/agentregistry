@@ -28,6 +28,10 @@ services:
 {{- range .EnvVars }}
       - {{.}}=${{"{"}}{{.}}{{"}"}}
 {{- end }}
+    volumes:
+      - type: bind
+        source: .
+        target: /config
 {{- range .McpServers }}
 {{- if eq .Type "command" }}
   {{.Name}}:

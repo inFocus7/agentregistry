@@ -48,7 +48,7 @@ func TranslateRegistryServer(
 		args = utils.ProcessArguments(args, pkg.RuntimeArguments, nil)
 
 		// Determine image and command based on registry type
-		config, args, err := utils.GetRegistryConfig(string(pkg.RegistryType), pkg.RunTimeHint, pkg.Identifier, args)
+		config, args, err := utils.GetRegistryConfig(string(pkg.RegistryType), pkg.RunTimeHint, pkg.Identifier, pkg.Version, args)
 		if err != nil {
 			return nil, err
 		}
