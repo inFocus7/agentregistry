@@ -1170,11 +1170,12 @@ func (w *McpServerWizard) prevStep() {
 	case stepArgsEnv:
 		w.step = stepCommandDetails
 	case stepName:
-		if w.chosenType == serverTypes.Remote.ID {
+		switch w.chosenType {
+		case serverTypes.Remote.ID:
 			w.step = stepRemoteHeaders
-		} else if w.chosenType == serverTypes.Registry.ID {
+		case serverTypes.Registry.ID:
 			w.step = stepRegistryVersion
-		} else {
+		default:
 			w.step = stepArgsEnv
 		}
 	default:
