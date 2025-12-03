@@ -70,23 +70,31 @@ func runFromDirectory(ctx context.Context, projectDir string) error {
 		return fmt.Errorf("failed to load agent.yaml: %w", err)
 	}
 
-	// Only regenerate folders and mcp_tools.py if there are registry-type MCP servers (which would require a re-generation)
+	// Resolve registry-type MCP servers if present
 	if hasRegistryServers(manifest) {
-		// resolve registry-type MCP servers and add them to the manifest in-memory
+		// resolve registry-type MCP servers and add them to the manifest
 		servers, err := utils.ParseAgentManifestServers(manifest, verbose)
 		if err != nil {
 			return fmt.Errorf("failed to parse agent manifest mcp servers: %w", err)
 		}
 		manifest.McpServers = servers
 
-		// Create config.yaml + Dockerfile for all command-type servers (including registry-resolved)
-		if err := project.EnsureMcpServerDirectories(projectDir, manifest, verbose); err != nil {
-			return fmt.Errorf("failed to create MCP server directories: %w", err)
+		var registryResolvedServers []common.McpServerType
+		for _, srv := range manifest.McpServers {
+			if srv.Type == "command" && strings.HasPrefix(srv.Build, "registry/") {
+				registryResolvedServers = append(registryResolvedServers, srv)
+			}
 		}
-
-		// Regenerate mcp_tools.py with the resolved MCP servers added
-		if err := project.RegenerateMcpTools(projectDir, manifest, verbose); err != nil {
-			return fmt.Errorf("failed to regenerate mcp_tools.py: %w", err)
+		if len(registryResolvedServers) > 0 {
+			tmpManifest := *manifest
+			tmpManifest.McpServers = registryResolvedServers
+			// create directories and build images for the registry-resolved servers
+			if err := project.EnsureMcpServerDirectories(projectDir, &tmpManifest, verbose); err != nil {
+				return fmt.Errorf("failed to create MCP server directories: %w", err)
+			}
+			if err := writeResolvedMCPServerConfig(projectDir, &tmpManifest, verbose); err != nil {
+				return fmt.Errorf("failed to write MCP server config: %w", err)
+			}
 		}
 	}
 
@@ -144,23 +152,31 @@ func runFromManifest(ctx context.Context, manifest *common.AgentManifest, overri
 			}
 			manifest.McpServers = servers
 
-			// Create directories & dockerfiles for command-type servers
-			if err := project.EnsureMcpServerDirectories(tmpDir, manifest, verbose); err != nil {
-				return fmt.Errorf("failed to create mcp server directories: %w", err)
+			// filter by registry-resolved servers
+			var registryResolvedServers []common.McpServerType
+			for _, srv := range manifest.McpServers {
+				if srv.Type == "command" && strings.HasPrefix(srv.Build, "registry/") {
+					registryResolvedServers = append(registryResolvedServers, srv)
+				}
 			}
 
-			// Build the registry-resolved servers
-			if err := buildRegistryResolvedServers(tmpDir, manifest, verbose); err != nil {
-				return fmt.Errorf("failed to build registry server images: %w", err)
-			}
+			if len(registryResolvedServers) > 0 {
+				// create a new manifest with only the registry-resolved servers to build
+				tmpManifest := *manifest
+				tmpManifest.McpServers = registryResolvedServers
 
-			// Write resolved MCP server config files for the agent to load at runtime
-			if err := writeResolvedMCPServerConfig(tmpDir, manifest, verbose); err != nil {
-				return fmt.Errorf("failed to write MCP server config: %w", err)
-			}
+				if err := project.EnsureMcpServerDirectories(tmpDir, &tmpManifest, verbose); err != nil {
+					return fmt.Errorf("failed to create mcp server directories: %w", err)
+				}
+				if err := buildRegistryResolvedServers(tmpDir, &tmpManifest, verbose); err != nil {
+					return fmt.Errorf("failed to build registry server images: %w", err)
+				}
+				if err := writeResolvedMCPServerConfig(tmpDir, &tmpManifest, verbose); err != nil {
+					return fmt.Errorf("failed to write MCP server config: %w", err)
+				}
 
-			// persist the temp dir for the agent to use
-			workDir = tmpDir
+				workDir = tmpDir
+			}
 		}
 
 		data, err := renderComposeFromManifest(manifest)
