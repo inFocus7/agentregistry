@@ -10,12 +10,10 @@ import (
 
 // TranslateRegistryServer converts a registry ServerSpec into a common.McpServerType
 // that can be used by the docker-compose generator.
-//
-// envOverrides allows passing environment variables that override defaults or satisfy required vars.
-// Returns an error if required environment variables are missing.
+// TODO: What are cases where there are both remotes and packages? Or multiple of any?
 func TranslateRegistryServer(
-	serverSpec *types.ServerSpec,
 	name string,
+	serverSpec *types.ServerSpec,
 	envOverrides map[string]string,
 ) (*common.McpServerType, error) {
 	// if there are remotes, use the first one
@@ -25,7 +23,7 @@ func TranslateRegistryServer(
 			return nil, fmt.Errorf("server %q remote has no URL", serverSpec.Name)
 		}
 
-		headers, err := utils.ProcessHeaders(remote.Headers, nil, serverSpec.Name)
+		headers, err := utils.ProcessHeaders(remote.Headers, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -48,7 +46,7 @@ func TranslateRegistryServer(
 		args = utils.ProcessArguments(args, pkg.RuntimeArguments, nil)
 
 		// Determine image and command based on registry type
-		config, args, err := utils.GetRegistryConfig(string(pkg.RegistryType), pkg.RunTimeHint, pkg.Identifier, pkg.Version, args)
+		config, args, err := utils.GetRegistryConfig(pkg, args)
 		if err != nil {
 			return nil, err
 		}
@@ -57,7 +55,7 @@ func TranslateRegistryServer(
 		args = utils.ProcessArguments(args, pkg.PackageArguments, nil)
 
 		// Process environment variables
-		envVarsMap, err := utils.ProcessEnvironmentVariables(pkg.EnvironmentVariables, envOverrides, serverSpec.Name)
+		envVarsMap, err := utils.ProcessEnvironmentVariables(pkg.EnvironmentVariables, envOverrides)
 		if err != nil {
 			return nil, err
 		}

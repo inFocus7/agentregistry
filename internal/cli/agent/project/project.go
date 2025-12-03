@@ -191,12 +191,13 @@ func EnsureMcpServerDirectories(projectDir string, manifest *common.AgentManifes
 	}
 
 	// Clean up registry/ folder to ensure fresh state for registry-resolved servers.
-	// This prevents stale configs from previous runs with different registry servers.
+	// This prevents stale configs from previous runs with different resolved registries.
 	registryDir := filepath.Join(projectDir, "registry")
 	if _, err := os.Stat(registryDir); err == nil {
 		if err := os.RemoveAll(registryDir); err != nil {
 			return fmt.Errorf("failed to clean up registry directory: %w", err)
 		}
+
 		if verbose {
 			fmt.Println("Cleaned up registry/ folder for fresh server configs")
 		}
@@ -287,4 +288,16 @@ func EnsureMcpServerDirectories(projectDir string, manifest *common.AgentManifes
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// ResolveProjectDir resolves the project directory path
+func ResolveProjectDir(projectDir string) (string, error) {
+	if projectDir == "" {
+		projectDir = "."
+	}
+	absPath, err := filepath.Abs(projectDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve project directory: %w", err)
+	}
+	return absPath, nil
 }

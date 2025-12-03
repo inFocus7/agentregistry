@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/agentregistry-dev/agentregistry/internal/cli/agent/frameworks/common"
 	"github.com/agentregistry-dev/agentregistry/internal/runtime/translation/api"
 	"github.com/agentregistry-dev/agentregistry/internal/runtime/translation/registry"
 
@@ -65,13 +66,12 @@ func (r *agentRegistryRuntime) ReconcileAll(
 		}
 		desiredState.Agents = append(desiredState.Agents, agent)
 
-		// Write resolved MCP server config file for this agent
+		// Write registry-resolved MCP server config file for this agent
+		// This is used to inject MCP servers resolved from a registry into the agent at runtime
 		if len(req.ResolvedMCPServers) > 0 {
 			if err := r.writeResolvedMCPServerConfig(req.RegistryAgent.Name, req.ResolvedMCPServers); err != nil {
-				// Log warning but don't fail deployment
-				if r.verbose {
-					fmt.Printf("Warning: Failed to write MCP server config for agent %s: %v\n", req.RegistryAgent.Name, err)
-				}
+				// Log error but don't fail deployment
+				fmt.Printf("Error: Failed to write MCP server config for agent %s: %v\n", req.RegistryAgent.Name, err)
 			}
 		}
 	}
@@ -152,25 +152,26 @@ func (r *agentRegistryRuntime) ensureLocalRuntime(
 	return nil
 }
 
-// writeResolvedMCPServerConfig writes resolved MCP server configuration to a faile
-// The format matches what Python mcp_tools.py expects for loading MCP servers at runtime
+// writeResolvedMCPServerConfig writes resolved MCP server configuration to a JSON file that matches the agent's framework's MCP format.
+// This enables registry-run agents to use registry-typed MCP servers at runtime.
+// TODO: If we add support for more agent languages/frameworks, expand this to work with those formats.
 func (r *agentRegistryRuntime) writeResolvedMCPServerConfig(agentName string, resolvedServers []*registry.MCPServerRunRequest) error {
-	// Convert resolved servers to Python-compatible format
-	var pythonServers []map[string]interface{}
+	// Convert resolved servers to common.PythonMCPServer format
+	var mcpServers []common.PythonMCPServer
 
 	for _, serverReq := range resolvedServers {
 		server := serverReq.RegistryServer
 
-		// Determine server type and build Python dict
-		serverDict := map[string]interface{}{
-			"name": server.Name,
+		// Determine server type and build common.PythonMCPServer
+		pythonServer := common.PythonMCPServer{
+			Name: server.Name,
 		}
 
 		// Check if it's a remote server
 		if len(server.Remotes) > 0 && (serverReq.PreferRemote || len(server.Packages) == 0) {
 			remote := server.Remotes[0]
-			serverDict["type"] = "remote"
-			serverDict["url"] = remote.URL
+			pythonServer.Type = "remote"
+			pythonServer.URL = remote.URL
 
 			// Process headers
 			if len(remote.Headers) > 0 || len(serverReq.HeaderValues) > 0 {
@@ -184,12 +185,12 @@ func (r *agentRegistryRuntime) writeResolvedMCPServerConfig(agentName string, re
 					headers[k] = v
 				}
 				if len(headers) > 0 {
-					serverDict["headers"] = headers
+					pythonServer.Headers = headers
 				}
 			}
 		} else if len(server.Packages) > 0 {
 			// Command-based server
-			serverDict["type"] = "command"
+			pythonServer.Type = "command"
 			// For command type, Python code constructs URL as f"http://{server_name}:3000/mcp"
 			// So we don't need to include url in the dict
 		} else {
@@ -197,13 +198,13 @@ func (r *agentRegistryRuntime) writeResolvedMCPServerConfig(agentName string, re
 			continue
 		}
 
-		pythonServers = append(pythonServers, serverDict)
+		mcpServers = append(mcpServers, pythonServer)
 	}
 
 	// Write to JSON file with agent-specific name
 	// Each agent container mounts /config, so we use agent name to avoid conflicts
 	configPath := filepath.Join(r.runtimeDir, fmt.Sprintf("mcp-servers-%s.json", agentName))
-	configData, err := json.MarshalIndent(pythonServers, "", "  ")
+	configData, err := json.MarshalIndent(mcpServers, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal MCP server config: %w", err)
 	}

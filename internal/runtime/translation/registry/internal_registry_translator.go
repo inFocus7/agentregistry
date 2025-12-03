@@ -122,13 +122,12 @@ func translateRemoteMCPServer(
 ) (*api.MCPServer, error) {
 	remoteInfo := registryServer.Remotes[0]
 
-	// Process headers using shared utility
-	headersMap, err := registryutils.ProcessHeaders(remoteInfo.Headers, headerValues, registryServer.Name)
+	// Process headers
+	headersMap, err := registryutils.ProcessHeaders(remoteInfo.Headers, headerValues)
 	if err != nil {
 		return nil, err
 	}
 
-	// Convert to []api.HeaderValue format
 	headers := make([]api.HeaderValue, 0, len(headersMap))
 	for k, v := range headersMap {
 		headers = append(headers, api.HeaderValue{
@@ -178,7 +177,7 @@ func translateLocalMCPServer(
 	addProcessedArgs(packageInfo.RuntimeArguments)
 
 	// Determine image and command based on registry type
-	config, args, err := registryutils.GetRegistryConfig(packageInfo.RegistryType, packageInfo.RunTimeHint, packageInfo.Identifier, packageInfo.Version, args)
+	config, args, err := registryutils.GetRegistryConfig(packageInfo, args)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +205,7 @@ func translateLocalMCPServer(
 
 	// Process environment variables using shared utility
 	// The function returns a map with all processed env vars, including defaults
-	processedEnvVars, err := registryutils.ProcessEnvironmentVariables(packageInfo.EnvironmentVariables, envValues, registryServer.Name)
+	processedEnvVars, err := registryutils.ProcessEnvironmentVariables(packageInfo.EnvironmentVariables, envValues)
 	if err != nil {
 		return nil, err
 	}

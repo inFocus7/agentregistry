@@ -68,7 +68,6 @@ func ProcessArguments(
 func ProcessEnvironmentVariables(
 	envVars []model.KeyValueInput,
 	overrides map[string]string,
-	serverName string,
 ) (map[string]string, error) {
 	result := make(map[string]string)
 	var missingRequired []string
@@ -99,7 +98,7 @@ func ProcessEnvironmentVariables(
 	}
 
 	if len(missingRequired) > 0 {
-		return nil, fmt.Errorf("missing required environment variables for server %q: %s", serverName, strings.Join(missingRequired, ", "))
+		return nil, fmt.Errorf("missing required environment variables: %s", strings.Join(missingRequired, ", "))
 	}
 
 	// Add any override vars that weren't in the spec
@@ -123,7 +122,6 @@ func ProcessEnvironmentVariables(
 func ProcessHeaders(
 	headers []model.KeyValueInput,
 	headerOverrides map[string]string,
-	serverName string,
 ) (map[string]string, error) {
 	result := make(map[string]string)
 	var missingRequired []string
@@ -160,7 +158,7 @@ func ProcessHeaders(
 	}
 
 	if len(missingRequired) > 0 {
-		return nil, fmt.Errorf("missing required headers for server %q: %s", serverName, strings.Join(missingRequired, ", "))
+		return nil, fmt.Errorf("missing required headers: %s", strings.Join(missingRequired, ", "))
 	}
 
 	return result, nil
@@ -168,56 +166,51 @@ func ProcessHeaders(
 
 // GetRegistryConfig returns the image and command configuration for a given registry type.
 func GetRegistryConfig(
-	registryType string,
-	runtimeHint string,
-	identifier string,
-	version string,
+	packageInfo model.Package,
 	args []string,
 ) (RegistryConfig, []string, error) {
 	var config RegistryConfig
 
 	// Normalize registry type to handle both constant and string cases
-	normalizedType := strings.ToLower(registryType)
+	normalizedType := strings.ToLower(string(packageInfo.RegistryType))
 
 	switch normalizedType {
 	case strings.ToLower(string(model.RegistryTypeNPM)):
 		config.Image = "node:24-alpine3.21"
-		config.Command = runtimeHint
+		config.Command = packageInfo.RunTimeHint
 		if config.Command == "" {
 			config.Command = "npx"
 		}
-		// Ensure -y flag is present for non-interactive mode
 		if !slices.Contains(args, "-y") {
 			args = append(args, "-y")
 		}
-		// Append identifier with version if specified
-		if version != "" {
-			args = append(args, identifier+"@"+version)
+
+		// Append identifier with version, if specified
+		if packageInfo.Version != "" {
+			args = append(args, packageInfo.Identifier+"@"+packageInfo.Version)
 		} else {
-			args = append(args, identifier)
+			args = append(args, packageInfo.Identifier)
 		}
 
 	case strings.ToLower(string(model.RegistryTypePyPI)):
 		config.Image = "ghcr.io/astral-sh/uv:debian"
-		config.Command = runtimeHint
+		config.Command = packageInfo.RunTimeHint
 		if config.Command == "" {
 			config.Command = "uvx"
 		}
-		// Append identifier with version if specified
-		if version != "" {
-			args = append(args, identifier+"=="+version)
+
+		// Append identifier with version, if specified
+		if packageInfo.Version != "" {
+			args = append(args, packageInfo.Identifier+"=="+packageInfo.Version)
 		} else {
-			args = append(args, identifier)
+			args = append(args, packageInfo.Identifier)
 		}
 
 	case strings.ToLower(string(model.RegistryTypeOCI)):
-		// For OCI, the identifier IS the image
-		config.Image = identifier
-		config.Command = runtimeHint
-		// Command might be set via RuntimeHint or left empty for default entrypoint
+		config.Image = packageInfo.Identifier
 
 	default:
-		return RegistryConfig{}, nil, fmt.Errorf("unsupported package registry type: %s", registryType)
+		return RegistryConfig{}, nil, fmt.Errorf("unsupported package registry type: %s", string(packageInfo.RegistryType))
 	}
 
 	return config, args, nil

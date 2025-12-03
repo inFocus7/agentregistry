@@ -9,9 +9,7 @@ import (
 	"github.com/modelcontextprotocol/registry/pkg/model"
 )
 
-// ParseAgentManifestServers resolves registry-type MCP servers in an agent manifest
-// by fetching them from the registry and translating them to command/remote types.
-// Non-registry servers are returned as-is.
+// ParseAgentManifestServers resolves registry-type MCP servers in an agent manifest, keeping non-registry servers as-is.
 func ParseAgentManifestServers(manifest *common.AgentManifest, verbose bool) ([]common.McpServerType, error) {
 	servers := []common.McpServerType{}
 
@@ -19,7 +17,7 @@ func ParseAgentManifestServers(manifest *common.AgentManifest, verbose bool) ([]
 		switch mcpServer.Type {
 		case "registry":
 			// Fetch server spec from registry and translate to command/remote type
-			translatedServer, err := ResolveRegistryServer(mcpServer, verbose)
+			translatedServer, err := resolveRegistryServer(mcpServer, verbose)
 			if err != nil {
 				return nil, fmt.Errorf("failed to resolve registry server %q: %w", mcpServer.Name, err)
 			}
@@ -32,8 +30,8 @@ func ParseAgentManifestServers(manifest *common.AgentManifest, verbose bool) ([]
 	return servers, nil
 }
 
-// ResolveRegistryServer fetches a server from the registry and translates it to a runnable config
-func ResolveRegistryServer(mcpServer common.McpServerType, verbose bool) (*common.McpServerType, error) {
+// resolveRegistryServer fetches a server from the registry and translates it to a runnable config
+func resolveRegistryServer(mcpServer common.McpServerType, verbose bool) (*common.McpServerType, error) {
 	registryURL := mcpServer.RegistryURL
 	if registryURL == "" {
 		registryURL = "http://127.0.0.1:12121"
@@ -50,7 +48,7 @@ func ResolveRegistryServer(mcpServer common.McpServerType, verbose bool) (*commo
 	envOverrides := collectEnvOverrides(serverEntry.Server.Packages)
 
 	// Translate the registry server spec to a runnable McpServerType
-	translated, err := TranslateRegistryServer(&serverEntry.Server, mcpServer.Name, envOverrides)
+	translated, err := TranslateRegistryServer(mcpServer.Name, &serverEntry.Server, envOverrides)
 	if err != nil {
 		return nil, err
 	}

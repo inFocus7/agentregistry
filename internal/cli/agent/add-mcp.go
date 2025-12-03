@@ -3,12 +3,12 @@ package agent
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/agentregistry-dev/agentregistry/internal/cli/agent/frameworks/common"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/agent/project"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/agent/tui"
+	"github.com/agentregistry-dev/agentregistry/internal/utils"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 )
@@ -50,10 +50,10 @@ func init() {
 }
 
 // addMcpCmd runs the interactive flow to append an MCP server to agent.yaml
-// note: adding a server from a registry will not resolve the MCP server directory + docker compose file here.
+// registry-based mcp servers are resolved at runtime, meaning they are just stored as a reference in the agent manifest at add-time.
 func addMcpCmd(name string) error {
 	// Determine project directory
-	resolvedDir, err := ResolveProjectDir(projectDir)
+	resolvedDir, err := project.ResolveProjectDir(projectDir)
 	if err != nil {
 		return err
 	}
@@ -72,7 +72,10 @@ func addMcpCmd(name string) error {
 	var res common.McpServerType
 	if remoteURL != "" || command != "" || image != "" || build != "" || registryURL != "" || registryServerName != "" {
 		if remoteURL != "" {
-			headerMap := parseKeyValuePairs(headers)
+			headerMap, err := utils.ParseKeyValuePairs(headers)
+			if err != nil {
+				return fmt.Errorf("failed to parse headers: %w", err)
+			}
 			res = common.McpServerType{
 				Type:    "remote",
 				URL:     remoteURL,
@@ -155,34 +158,6 @@ func addMcpCmd(name string) error {
 
 	fmt.Printf("✓ Added MCP server '%s' (%s) to agent.yaml\n", res.Name, res.Type)
 	return nil
-}
-
-// ResolveProjectDir resolves the project directory path
-func ResolveProjectDir(projectDir string) (string, error) {
-	if projectDir == "" {
-		projectDir = "."
-	}
-	absPath, err := filepath.Abs(projectDir)
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve project directory: %w", err)
-	}
-	return absPath, nil
-}
-
-// parseKeyValuePairs parses KEY=VALUE pairs from a string slice
-func parseKeyValuePairs(pairs []string) map[string]string {
-	result := make(map[string]string)
-	for _, pair := range pairs {
-		parts := strings.SplitN(pair, "=", 2)
-		if len(parts) == 2 {
-			key := strings.TrimSpace(parts[0])
-			value := strings.TrimSpace(parts[1])
-			if key != "" {
-				result[key] = value
-			}
-		}
-	}
-	return result
 }
 
 func runAddMcp(cmd *cobra.Command, positionalArgs []string) error {

@@ -818,6 +818,7 @@ func (s *registryServiceImpl) ReconcileAll(ctx context.Context) error {
 			return fmt.Errorf("failed to resolve MCP servers for agent %s: %w", agentReq.RegistryAgent.Name, err)
 		}
 
+		// Store resolved mcp servers so they can be written to the agent mcp server injection config
 		agentReq.ResolvedMCPServers = resolvedServers
 		// Add resolved servers to serverRunRequests so they get deployed
 		serverRunRequests = append(serverRunRequests, resolvedServers...)
@@ -834,21 +835,20 @@ func (s *registryServiceImpl) ReconcileAll(ctx context.Context) error {
 }
 
 // resolveAgentManifestMCPServers extracts and resolves registry-type MCP servers from an agent manifest
-// This follows the same logic as the CLI-side ResolveRegistryServer
+// This follows the same logic as the CLI-side resolveRegistryServer
+// TODO: Should we also be resolving the other types (i.e. command)? I didn't see my command server configured in the agent-gateway yaml, unsure if expected or a bug.
+// cat /tmp/arctl-runtime/agent-gateway.yaml only had an mcp route for the registry-resolved (since we added it to the run requests).
 func (s *registryServiceImpl) resolveAgentManifestMCPServers(ctx context.Context, manifest *common.AgentManifest) ([]*registry.MCPServerRunRequest, error) {
 	var resolvedServers []*registry.MCPServerRunRequest
 
 	for _, mcpServer := range manifest.McpServers {
 		// Only process registry-type servers (non-registry servers are baked into the image)
-		// TODO(infocus7): Should we also be resolving the others (command-based)? I didn't see my @everything command server configured in the agent-gateway yaml, unsure if expected or a bug...
-		// cat /tmp/arctl-runtime/agent-gateway.yaml only had an mcp route for the registry-resolved one.
 		if mcpServer.Type != "registry" {
 			continue
 		}
 
 		// Determine registry URL
 		registryURL := mcpServer.RegistryURL
-		log.Printf("NOTE: Registry URL %s", registryURL)
 		if registryURL == "" {
 			registryURL = "http://127.0.0.1:12121"
 		}
@@ -869,10 +869,10 @@ func (s *registryServiceImpl) resolveAgentManifestMCPServers(ctx context.Context
 		// Create MCPServerRunRequest so that this resolved server is ran/deployed
 		resolvedServers = append(resolvedServers, &registry.MCPServerRunRequest{
 			RegistryServer: serverJSON,
-			// PreferRemote:   len(serverJSON.Remotes) > 0 && len(serverJSON.Packages) == 0,
-			EnvValues:    make(map[string]string),
-			ArgValues:    make(map[string]string),
-			HeaderValues: make(map[string]string),
+			PreferRemote:   len(serverJSON.Remotes) > 0 && len(serverJSON.Packages) == 0,
+			EnvValues:      make(map[string]string),
+			ArgValues:      make(map[string]string),
+			HeaderValues:   make(map[string]string),
 		})
 	}
 
@@ -913,11 +913,10 @@ func fetchServerFromRegistry(baseURL string, name string, version string) (*type
 		return nil, fmt.Errorf("failed to decode server list response: %w", err)
 	}
 
-	if len(registryResp.Servers) == 0 {
-		return nil, fmt.Errorf("server not found: %s with version %s", name, version)
+	if len(registryResp.Servers) != 1 {
+		return nil, fmt.Errorf("expected 1 server, got %d: %s with version %s", len(registryResp.Servers), name, version)
 	}
 
-	// based on name + version, there should only be one server
 	return &registryResp.Servers[0], nil
 }
 
@@ -933,17 +932,20 @@ func convertServerSpecToServerJSON(spec *types.ServerSpec) *apiv0.ServerJSON {
 	}
 
 	return &apiv0.ServerJSON{
-		Schema:      "", // ServerSpec doesn't include schema, but it's not required for runtime
+		// ServerSpec doesn't include schema
+		// TODO(infocus7): Should we use model.CurrentSchemaURL? Or should we return the schema from the ServerEntry?
+		// In raw JSON, it's "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json", so would maybe need to parse it.
+		Schema:      "",
 		Name:        spec.Name,
 		Title:       spec.Title,
 		Description: spec.Description,
 		Version:     spec.Version,
-		// Status is not part of ServerJSON - it's in the metadata
-		WebsiteURL: spec.WebsiteURL,
-		Repository: repo,
-		Packages:   spec.Packages,
-		Remotes:    spec.Remotes,
-		Icons:      nil, // ServerSpec doesn't include icons
-		Meta:       nil, // ServerSpec doesn't include meta
+		WebsiteURL:  spec.WebsiteURL,
+		Repository:  repo,
+		Packages:    spec.Packages,
+		Remotes:     spec.Remotes,
+		// ServerSpec doesn't include meta
+		Icons: nil,
+		Meta:  nil,
 	}
 }
