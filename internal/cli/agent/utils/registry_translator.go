@@ -10,14 +10,18 @@ import (
 
 // TranslateRegistryServer converts a registry ServerSpec into a common.McpServerType
 // that can be used by the docker-compose generator.
-// TODO: What are cases where there are both remotes and packages? Or multiple of any?
 func TranslateRegistryServer(
 	name string,
 	serverSpec *types.ServerSpec,
 	envOverrides map[string]string,
+	preferRemote bool,
 ) (*common.McpServerType, error) {
-	// if there are remotes, use the first one
-	if len(serverSpec.Remotes) > 0 {
+	if len(serverSpec.Remotes) == 0 && len(serverSpec.Packages) == 0 {
+		return nil, fmt.Errorf("server %q has no remotes or packages", serverSpec.Name)
+	}
+
+	useRemote := len(serverSpec.Remotes) > 0 && (preferRemote || len(serverSpec.Packages) == 0)
+	if useRemote {
 		remote := serverSpec.Remotes[0]
 		if remote.URL == "" {
 			return nil, fmt.Errorf("server %q remote has no URL", serverSpec.Name)
@@ -34,10 +38,7 @@ func TranslateRegistryServer(
 			URL:     remote.URL,
 			Headers: headers,
 		}, nil
-	}
-
-	// if there are packages (command-based servers), use the first one
-	if len(serverSpec.Packages) > 0 {
+	} else {
 		pkg := serverSpec.Packages[0]
 
 		var args []string
@@ -71,6 +72,4 @@ func TranslateRegistryServer(
 			Env:     envVars,
 		}, nil
 	}
-
-	return nil, fmt.Errorf("server %q has no packages or remotes defined", serverSpec.Name)
 }

@@ -22,17 +22,18 @@ var AddMcpCmd = &cobra.Command{
 }
 
 var (
-	projectDir            string
-	remoteURL             string
-	headers               []string
-	command               string
-	args                  []string
-	env                   []string
-	image                 string
-	build                 string
-	registryURL           string
-	registryServerName    string
-	registryServerVersion string
+	projectDir                 string
+	remoteURL                  string
+	headers                    []string
+	command                    string
+	args                       []string
+	env                        []string
+	image                      string
+	build                      string
+	registryURL                string
+	registryServerName         string
+	registryServerVersion      string
+	registryServerPreferRemote bool
 )
 
 func init() {
@@ -47,6 +48,7 @@ func init() {
 	AddMcpCmd.Flags().StringVar(&registryURL, "registry-url", "", "Registry URL (e.g., https://registry.example.com) (optional; mutually exclusive with --remote, --command, --image, --build)")
 	AddMcpCmd.Flags().StringVar(&registryServerName, "registry-server-name", "", "Registry-deployed MCP server name (optional; mutually exclusive with --remote, --command, --image, --build)")
 	AddMcpCmd.Flags().StringVar(&registryServerVersion, "registry-server-version", "", "Version of the MCP server to deploy from registry (e.g., 1.0.0) (optional)")
+	AddMcpCmd.Flags().BoolVar(&registryServerPreferRemote, "registry-server-prefer-remote", false, "Prefer remote MCP server (optional)")
 }
 
 // addMcpCmd runs the interactive flow to append an MCP server to agent.yaml
@@ -84,11 +86,12 @@ func addMcpCmd(name string) error {
 			}
 		} else if registryURL != "" && registryServerName != "" {
 			res = common.McpServerType{
-				Type:                  "registry",
-				Name:                  name,
-				RegistryURL:           registryURL,
-				RegistryServerName:    registryServerName,
-				RegistryServerVersion: registryServerVersion,
+				Type:                       "registry",
+				Name:                       name,
+				RegistryURL:                registryURL,
+				RegistryServerName:         registryServerName,
+				RegistryServerVersion:      registryServerVersion,
+				RegistryServerPreferRemote: registryServerPreferRemote,
 			}
 		} else {
 			if image != "" && build != "" {

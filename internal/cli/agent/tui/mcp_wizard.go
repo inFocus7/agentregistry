@@ -29,6 +29,7 @@ const (
 	stepRegistryURL
 	stepRegistryServerName
 	stepRegistryServerVersion
+	stepRegistryServerPreferRemote
 	stepArgsEnv
 	stepName
 	stepDone
@@ -134,13 +135,14 @@ var (
 		Registry: WizardFlowConfig{
 			Name: "registry",
 			StepPositions: map[wizardStep]int{
-				stepPickType:              1,
-				stepRegistryURL:           2,
-				stepRegistryServerName:    3,
-				stepRegistryServerVersion: 4,
-				stepName:                  5,
+				stepPickType:                   1,
+				stepRegistryURL:                2,
+				stepRegistryServerName:         3,
+				stepRegistryServerVersion:      4,
+				stepRegistryServerPreferRemote: 5,
+				stepName:                       6,
 			},
-			TotalSteps: 5,
+			TotalSteps: 6,
 		},
 	}
 )
@@ -175,12 +177,14 @@ type McpServerWizard struct {
 	headers          map[string]string
 
 	// Registry support
-	registryURLInput              textinput.Model
-	registryServerNameList        list.Model
-	registryServerVersionList     list.Model
-	registryURL                   string
-	selectedRegistryServerName    string
-	selectedRegistryServerVersion string
+	registryURLInput                   textinput.Model
+	registryServerNameList             list.Model
+	registryServerVersionList          list.Model
+	registryServerPreferRemoteList     list.Model
+	registryURL                        string
+	selectedRegistryServerName         string
+	selectedRegistryServerVersion      string
+	selectedRegistryServerPreferRemote bool
 
 	chosenType   string // serverTypes.Remote.ID or serverTypes.Command.ID
 	chosenMethod string // commandMethods.*.ID
@@ -262,26 +266,39 @@ func NewMcpServerWizard() *McpServerWizard {
 	rvl.Styles.Title = lipgloss.NewStyle().Bold(true)
 	rvl.Styles.PaginationStyle = list.DefaultStyles().PaginationStyle.PaddingLeft(2)
 
+	// Registry prefer remote list (boolean true/false)
+	rrl := list.New([]list.Item{}, choiceDelegate{}, 50, 12)
+	rrl.Title = "Prefer remote MCP server"
+	rrl.SetShowStatusBar(false)
+	rrl.SetFilteringEnabled(false)
+	rrl.Styles.Title = lipgloss.NewStyle().Bold(true)
+	rrl.Styles.PaginationStyle = list.DefaultStyles().PaginationStyle.PaddingLeft(2)
+	rrl.SetItems([]list.Item{
+		choiceItem{"true"},
+		choiceItem{"false"},
+	})
+
 	w := &McpServerWizard{
-		id:                        "mcp_server_wizard",
-		step:                      stepPickType,
-		typeList:                  tl,
-		methodList:                ml,
-		modeList:                  mdl,
-		registryURLInput:          mk("https://registry.example.com", 50),
-		registryServerNameList:    rnl,
-		registryServerVersionList: rvl,
-		urlInput:                  mk("https://your-mcp-server", 40),
-		imageInput:                mk("ghcr.io/org/tool:tag", 40),
-		pkgInput:                  mk("@acme/mcp-tool", 40),
-		commandInput:              mk("command to execute", 40),
-		argsInput:                 mk("comma-separated args (optional)", 40),
-		envInput:                  mk("comma-separated KEY=VALUE (optional)", 40),
-		nameInput:                 mk("server name", 40),
-		filePicker:                fp,
-		headerKeyInput:            mk("Header name (e.g., Authorization)", 40),
-		headerValueInput:          mk("Header value (e.g., Bearer ${API_KEY})", 50),
-		headers:                   make(map[string]string),
+		id:                             "mcp_server_wizard",
+		step:                           stepPickType,
+		typeList:                       tl,
+		methodList:                     ml,
+		modeList:                       mdl,
+		registryURLInput:               mk("https://registry.example.com", 50),
+		registryServerNameList:         rnl,
+		registryServerVersionList:      rvl,
+		registryServerPreferRemoteList: rrl,
+		urlInput:                       mk("https://your-mcp-server", 40),
+		imageInput:                     mk("ghcr.io/org/tool:tag", 40),
+		pkgInput:                       mk("@acme/mcp-tool", 40),
+		commandInput:                   mk("command to execute", 40),
+		argsInput:                      mk("comma-separated args (optional)", 40),
+		envInput:                       mk("comma-separated KEY=VALUE (optional)", 40),
+		nameInput:                      mk("server name", 40),
+		filePicker:                     fp,
+		headerKeyInput:                 mk("Header name (e.g., Authorization)", 40),
+		headerValueInput:               mk("Header value (e.g., Bearer ${API_KEY})", 50),
+		headers:                        make(map[string]string),
 	}
 	return w
 }
@@ -312,6 +329,8 @@ func (w *McpServerWizard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			w.registryServerNameList.SetSize(maxInt(50, m.Width-20), maxInt(12, m.Height-10))
 		case stepRegistryServerVersion:
 			w.registryServerVersionList.SetSize(maxInt(50, m.Width-20), maxInt(12, m.Height-10))
+		case stepRegistryServerPreferRemote:
+			w.registryServerPreferRemoteList.SetSize(maxInt(50, m.Width-20), maxInt(12, m.Height-10))
 		case stepCommandMethod:
 			w.methodList.SetSize(maxInt(50, m.Width-20), maxInt(10, m.Height-10))
 		}
@@ -360,6 +379,17 @@ func (w *McpServerWizard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		w.registryServerVersionList.SetItems(items)
 		w.step = stepRegistryServerVersion
 		return w, nil
+	case fetchRegistryServerPreferRemoteMsg:
+		if m.err != nil {
+			w.errMsg = fmt.Sprintf("Failed to fetch prefer remote for server %s: %v", m.serverName, m.err)
+			return w, nil
+		}
+		w.registryServerPreferRemoteList.SetItems([]list.Item{
+			choiceItem{"true"},
+			choiceItem{"false"},
+		})
+		w.step = stepRegistryServerPreferRemote
+		return w, nil
 	case tea.KeyMsg:
 		switch m.String() {
 		case "esc":
@@ -397,6 +427,10 @@ func (w *McpServerWizard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stepRegistryServerVersion:
 		var cmd tea.Cmd
 		w.registryServerVersionList, cmd = w.registryServerVersionList.Update(msg)
+		return w, tea.Batch(fpCmd, cmd)
+	case stepRegistryServerPreferRemote:
+		var cmd tea.Cmd
+		w.registryServerPreferRemoteList, cmd = w.registryServerPreferRemoteList.Update(msg)
 		return w, tea.Batch(fpCmd, cmd)
 	case stepCommandMethod:
 		var cmd tea.Cmd
@@ -473,6 +507,8 @@ func (w *McpServerWizard) View() string {
 		body = w.registryServerNameList.View() + w.errorView()
 	case stepRegistryServerVersion:
 		body = w.registryServerVersionList.View() + w.errorView()
+	case stepRegistryServerPreferRemote:
+		body = w.registryServerPreferRemoteList.View() + w.errorView()
 	case stepCommandMethod:
 		body = w.methodList.View()
 	case stepCommandMode:
@@ -525,6 +561,8 @@ func (w *McpServerWizard) onEnter() tea.Cmd {
 		return w.enterRegistryServerName()
 	case stepRegistryServerVersion:
 		return w.enterRegistryServerVersion()
+	case stepRegistryServerPreferRemote:
+		return w.enterRegistryServerPreferRemote()
 	case stepCommandMethod:
 		return w.enterCommandMethod()
 	case stepCommandMode:
@@ -615,6 +653,13 @@ type fetchRegistryServerVersionsMsg struct {
 	err        error
 }
 
+// fetchRegistryServerPreferRemoteCmd is a tea.Msg for fetching prefer remote for a server
+type fetchRegistryServerPreferRemoteMsg struct {
+	serverName   string
+	preferRemote bool
+	err          error
+}
+
 // fetchRegistryServerVersions performs the async operation to fetch versions for a server
 func (w *McpServerWizard) fetchRegistryServerVersions(serverName string) tea.Cmd {
 	return func() tea.Msg {
@@ -644,10 +689,20 @@ func (w *McpServerWizard) enterRegistryServerName() tea.Cmd {
 	return nil
 }
 
-// enterRegistryServerVersion processes the selected version and advances to naming.
+// enterRegistryServerVersion processes the selected version and advances to prefer remote step.
 func (w *McpServerWizard) enterRegistryServerVersion() tea.Cmd {
 	if it, ok := w.registryServerVersionList.SelectedItem().(choiceItem); ok {
 		w.selectedRegistryServerVersion = it.Title()
+		w.step = stepRegistryServerPreferRemote
+		return nil
+	}
+	return nil
+}
+
+// enterRegistryServerPreferRemote processes the selected prefer remote and advances to naming.
+func (w *McpServerWizard) enterRegistryServerPreferRemote() tea.Cmd {
+	if it, ok := w.registryServerPreferRemoteList.SelectedItem().(choiceItem); ok {
+		w.selectedRegistryServerPreferRemote = it.Title() == "true"
 		w.step = stepName
 		w.nameInput.SetValue("")
 		w.nameInput.Focus()
@@ -866,6 +921,7 @@ func (w *McpServerWizard) buildFinalResult(name string) {
 		w.result.RegistryURL = w.registryURL
 		w.result.RegistryServerName = w.selectedRegistryServerName
 		w.result.RegistryServerVersion = w.selectedRegistryServerVersion
+		w.result.RegistryServerPreferRemote = w.selectedRegistryServerPreferRemote
 		return
 	}
 
@@ -924,6 +980,8 @@ func (w *McpServerWizard) onTab(reverse bool) tea.Cmd {
 		return w.tabRegistryServerName(reverse)
 	case stepRegistryServerVersion:
 		return w.tabRegistryServerVersion(reverse)
+	case stepRegistryServerPreferRemote:
+		return w.tabRegistryServerPreferRemote(reverse)
 	case stepCommandDetails:
 		return w.tabCommandDetails(reverse)
 	case stepArgsEnv:
@@ -945,6 +1003,9 @@ func (w *McpServerWizard) tabRegistryServerName(_ bool) tea.Cmd { return nil }
 
 // tabRegistryServerVersion has a single list; nothing to cycle.
 func (w *McpServerWizard) tabRegistryServerVersion(_ bool) tea.Cmd { return nil }
+
+// tabRegistryServerPreferRemote has a single list; nothing to cycle.
+func (w *McpServerWizard) tabRegistryServerPreferRemote(_ bool) tea.Cmd { return nil }
 
 // tabRemoteHeaders toggles focus between header key and value inputs.
 func (w *McpServerWizard) tabRemoteHeaders(reverse bool) tea.Cmd {
@@ -1157,6 +1218,8 @@ func (w *McpServerWizard) prevStep() {
 		w.step = stepRegistryURL
 	case stepRegistryServerVersion:
 		w.step = stepRegistryServerName
+	case stepRegistryServerPreferRemote:
+		w.step = stepRegistryServerVersion
 	case stepCommandMethod:
 		w.step = stepPickType
 	case stepCommandMode:
@@ -1174,7 +1237,7 @@ func (w *McpServerWizard) prevStep() {
 		case serverTypes.Remote.ID:
 			w.step = stepRemoteHeaders
 		case serverTypes.Registry.ID:
-			w.step = stepRegistryServerVersion
+			w.step = stepRegistryServerPreferRemote
 		default:
 			w.step = stepArgsEnv
 		}

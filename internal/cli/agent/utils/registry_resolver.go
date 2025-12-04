@@ -48,7 +48,7 @@ func resolveRegistryServer(mcpServer common.McpServerType, verbose bool) (*commo
 	envOverrides := collectEnvOverrides(serverEntry.Server.Packages)
 
 	// Translate the registry server spec to a runnable McpServerType
-	translated, err := TranslateRegistryServer(mcpServer.Name, &serverEntry.Server, envOverrides)
+	translated, err := TranslateRegistryServer(mcpServer.Name, &serverEntry.Server, envOverrides, mcpServer.RegistryServerPreferRemote)
 	if err != nil {
 		return nil, err
 	}

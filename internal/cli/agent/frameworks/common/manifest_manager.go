@@ -38,9 +38,10 @@ type McpServerType struct {
 	URL     string            `yaml:"url,omitempty" json:"url,omitempty"`
 	Headers map[string]string `yaml:"headers,omitempty" json:"headers,omitempty"`
 	// Registry MCP server fields -- these are translated into the appropiate fields above when the agent is ran or deployed
-	RegistryURL           string `yaml:"registryURL,omitempty" json:"registryURL,omitempty"`
-	RegistryServerName    string `yaml:"registryServerName,omitempty" json:"registryServerName,omitempty"`
-	RegistryServerVersion string `yaml:"registryServerVersion,omitempty" json:"registryServerVersion,omitempty"`
+	RegistryURL                string `yaml:"registryURL,omitempty" json:"registryURL,omitempty"`
+	RegistryServerName         string `yaml:"registryServerName,omitempty" json:"registryServerName,omitempty"`
+	RegistryServerVersion      string `yaml:"registryServerVersion,omitempty" json:"registryServerVersion,omitempty"`
+	RegistryServerPreferRemote bool   `yaml:"registryServerPreferRemote,omitempty" json:"registryServerPreferRemote,omitempty"`
 }
 
 // Manager handles loading and saving of agent manifests.

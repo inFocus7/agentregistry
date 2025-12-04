@@ -869,7 +869,7 @@ func (s *registryServiceImpl) resolveAgentManifestMCPServers(ctx context.Context
 		// Create MCPServerRunRequest so that this resolved server is ran/deployed
 		resolvedServers = append(resolvedServers, &registry.MCPServerRunRequest{
 			RegistryServer: serverJSON,
-			PreferRemote:   len(serverJSON.Remotes) > 0 && len(serverJSON.Packages) == 0,
+			PreferRemote:   mcpServer.RegistryServerPreferRemote,
 			EnvValues:      make(map[string]string),
 			ArgValues:      make(map[string]string),
 			HeaderValues:   make(map[string]string),

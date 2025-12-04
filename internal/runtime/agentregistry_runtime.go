@@ -161,14 +161,20 @@ func (r *agentRegistryRuntime) writeResolvedMCPServerConfig(agentName string, re
 
 	for _, serverReq := range resolvedServers {
 		server := serverReq.RegistryServer
+		// Skip servers with no remotes or packages
+		if len(server.Remotes) == 0 && len(server.Packages) == 0 {
+			continue
+		}
 
 		// Determine server type and build common.PythonMCPServer
 		pythonServer := common.PythonMCPServer{
 			Name: server.Name,
 		}
 
-		// Check if it's a remote server
-		if len(server.Remotes) > 0 && (serverReq.PreferRemote || len(server.Packages) == 0) {
+		// use remote if prefer remote is true or there are no packages
+		useRemote := len(server.Remotes) > 0 && (serverReq.PreferRemote || len(server.Packages) == 0)
+
+		if useRemote {
 			remote := server.Remotes[0]
 			pythonServer.Type = "remote"
 			pythonServer.URL = remote.URL
@@ -188,14 +194,11 @@ func (r *agentRegistryRuntime) writeResolvedMCPServerConfig(agentName string, re
 					pythonServer.Headers = headers
 				}
 			}
-		} else if len(server.Packages) > 0 {
+		} else {
 			// Command-based server
 			pythonServer.Type = "command"
 			// For command type, Python code constructs URL as f"http://{server_name}:3000/mcp"
 			// So we don't need to include url in the dict
-		} else {
-			// Skip servers with no packages or remotes
-			continue
 		}
 
 		mcpServers = append(mcpServers, pythonServer)
