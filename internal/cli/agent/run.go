@@ -3,7 +3,6 @@ package agent
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -72,9 +71,15 @@ func runFromDirectory(ctx context.Context, projectDir string) error {
 		return fmt.Errorf("failed to load agent.yaml: %w", err)
 	}
 
+	// Always clear previously resolved registry artifacts to avoid stale folders.
+	if err := project.CleanupRegistryDir(projectDir, verbose); err != nil {
+		return fmt.Errorf("failed to clean registry directory: %w", err)
+	}
+
+	var serversForConfig []common.PythonMCPServer
+
 	// Resolve registry-type MCP servers if present
 	if hasRegistryServers(manifest) {
-		// resolve registry-type MCP servers and add them to the manifest
 		servers, err := agentutils.ParseAgentManifestServers(manifest, verbose)
 		if err != nil {
 			return fmt.Errorf("failed to parse agent manifest mcp servers: %w", err)
@@ -94,15 +99,17 @@ func runFromDirectory(ctx context.Context, projectDir string) error {
 			if err := project.EnsureMcpServerDirectories(projectDir, &tmpManifest, verbose); err != nil {
 				return fmt.Errorf("failed to create MCP server directories: %w", err)
 			}
-			if err := writeResolvedMCPServerConfig(projectDir, &tmpManifest, "", verbose); err != nil {
-				return fmt.Errorf("failed to write MCP server config: %w", err)
-			}
+			serversForConfig = common.PythonServersFromManifest(&tmpManifest)
 		}
-	} else {
-		// no registry-type MCP servers, we clean up the resolved MCP server config in case any previous one exists.
-		if err := cleanupResolvedMCPServerConfig(projectDir, manifest.Name, "", verbose); err != nil {
-			return fmt.Errorf("failed to cleanup resolved MCP server config: %w", err)
-		}
+	}
+
+	// Always clean before run; only write config when we have resolved registry servers to persist.
+	if err := common.RefreshMCPConfig(
+		&common.MCPConfigTarget{BaseDir: projectDir, AgentName: manifest.Name},
+		serversForConfig,
+		verbose,
+	); err != nil {
+		return fmt.Errorf("failed to refresh resolved MCP server config: %w", err)
 	}
 
 	if err := project.RegenerateDockerCompose(projectDir, manifest, "", verbose); err != nil {
@@ -131,6 +138,11 @@ func hasRegistryServers(manifest *common.AgentManifest) bool {
 	return false
 }
 
+// runFromManifest runs an agent based on a manifest, with optional pre-resolved data.
+//   - overrides is non-nil when coming from runFromDirectory: compose and resolved MCP config
+//     are already prepared (including cleanup), so this function skips resolution/cleanup.
+//   - when overrides is nil, this function resolves registry MCP servers (if any), builds them,
+//     renders compose, and creates mcp-servers.json for registry runs.
 func runFromManifest(ctx context.Context, manifest *common.AgentManifest, version string, overrides *runContext) error {
 	if manifest == nil {
 		return fmt.Errorf("agent manifest is required")
@@ -139,27 +151,22 @@ func runFromManifest(ctx context.Context, manifest *common.AgentManifest, versio
 	var composeData []byte
 	workDir := ""
 
-	if overrides != nil {
+	useOverrides := overrides != nil
+	var serversForConfig []common.PythonMCPServer
+
+	if useOverrides {
 		// servers already resolved, compose already generated (i.e. from runFromDirectory)
 		composeData = overrides.composeData
 		workDir = overrides.workDir
 	} else {
-		// we'll need to resolve and build registry-resolved MCP servers at runtime
-		// if no registry-type MCP servers are present, we can skip this
+		// Resolve registry-type MCP servers (if any) and build registry-resolved command servers.
 		if hasRegistryServers(manifest) {
-			tmpDir, err := os.MkdirTemp("", "arctl-registry-resolve-*")
-			if err != nil {
-				return fmt.Errorf("failed to create temporary directory: %w", err)
-			}
-
-			// Called with registry agent name - need to resolve and render in-memory
 			servers, err := agentutils.ParseAgentManifestServers(manifest, verbose)
 			if err != nil {
 				return fmt.Errorf("failed to parse agent manifest mcp servers: %w", err)
 			}
 			manifest.McpServers = servers
 
-			// filter by registry-resolved servers
 			var registryResolvedServers []common.McpServerType
 			for _, srv := range manifest.McpServers {
 				if srv.Type == "command" && strings.HasPrefix(srv.Build, "registry/") {
@@ -168,7 +175,11 @@ func runFromManifest(ctx context.Context, manifest *common.AgentManifest, versio
 			}
 
 			if len(registryResolvedServers) > 0 {
-				// create a new manifest with only the registry-resolved servers to build
+				tmpDir, err := os.MkdirTemp("", "arctl-registry-resolve-*")
+				if err != nil {
+					return fmt.Errorf("failed to create temporary directory: %w", err)
+				}
+
 				tmpManifest := *manifest
 				tmpManifest.McpServers = registryResolvedServers
 
@@ -178,11 +189,9 @@ func runFromManifest(ctx context.Context, manifest *common.AgentManifest, versio
 				if err := buildRegistryResolvedServers(tmpDir, &tmpManifest, verbose); err != nil {
 					return fmt.Errorf("failed to build registry server images: %w", err)
 				}
-				if err := writeResolvedMCPServerConfig(tmpDir, &tmpManifest, version, verbose); err != nil {
-					return fmt.Errorf("failed to write MCP server config: %w", err)
-				}
 
 				workDir = tmpDir
+				serversForConfig = common.PythonServersFromManifest(&tmpManifest)
 			}
 		}
 
@@ -191,12 +200,21 @@ func runFromManifest(ctx context.Context, manifest *common.AgentManifest, versio
 			return err
 		}
 		composeData = data
+
+		// Clean and write the resolved MCP server config when this function performed resolution.
+		if err := common.RefreshMCPConfig(
+			&common.MCPConfigTarget{BaseDir: workDir, AgentName: manifest.Name, Version: version},
+			serversForConfig,
+			verbose,
+		); err != nil {
+			return err
+		}
 	}
 
 	err := runAgent(ctx, composeData, manifest, workDir)
 
 	// Clean up temp directory for registry-run agents
-	if workDir != "" && strings.Contains(workDir, "arctl-registry-resolve-") {
+	if !useOverrides && workDir != "" && strings.Contains(workDir, "arctl-registry-resolve-") {
 		if cleanupErr := os.RemoveAll(workDir); cleanupErr != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to remove temporary directory %s: %v\n", workDir, cleanupErr)
 		}
@@ -410,102 +428,6 @@ func buildRegistryResolvedServers(tempDir string, manifest *common.AgentManifest
 		if err := exec.Build(imageName, "."); err != nil {
 			return fmt.Errorf("docker build failed for registry server %s: %w", srv.Name, err)
 		}
-	}
-
-	return nil
-}
-
-// writeResolvedMCPServerConfig writes resolved MCP server configuration to a JSON file that matches the agent's framework's MCP format.
-// This enables registry-run agents to use registry-typed MCP servers at runtime.
-// Similar to writeResolvedMCPServerConfig in runtime/agentregistry_runtime.go
-// TODO: If we add support for more agent languages/frameworks, expand this to work with those formats.
-func writeResolvedMCPServerConfig(tempDir string, manifest *common.AgentManifest, version string, verbose bool) error {
-	if manifest == nil || len(manifest.McpServers) == 0 {
-		return nil
-	}
-
-	// Convert resolved servers to the agent's framework's MCP format
-	var mcpServers []common.PythonMCPServer
-
-	for _, srv := range manifest.McpServers {
-		// Only include resolved servers for the agent
-		if srv.Type == "registry" {
-			continue
-		}
-
-		pythonServer := common.PythonMCPServer{
-			Name: srv.Name,
-			Type: srv.Type,
-		}
-
-		if srv.Type == "remote" {
-			pythonServer.URL = srv.URL
-			if len(srv.Headers) > 0 {
-				pythonServer.Headers = srv.Headers
-			}
-		}
-		// For command type, the Python code constructs URL as f"http://{server_name}:3000/mcp"
-		// So we don't need to include url in the dict
-
-		mcpServers = append(mcpServers, pythonServer)
-	}
-
-	if len(mcpServers) == 0 {
-		return nil // No resolved servers to write
-	}
-
-	// Determine config directory path based on whether version is provided
-	var configDir string
-	if version != "" {
-		// Registry runs: use version-specific path {agentName}/{version}/
-		sanitizedVersion := utils.SanitizeVersion(version)
-		configDir = filepath.Join(tempDir, manifest.Name, sanitizedVersion)
-	} else {
-		// Local runs: use simple path {agentName}/
-		configDir = filepath.Join(tempDir, manifest.Name)
-	}
-
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return fmt.Errorf("failed to create agent config directory: %w", err)
-	}
-
-	// Write to JSON file at {agentName}/{version}/mcp-servers.json or {agentName}/mcp-servers.json
-	// The agent container will mount this directory to /config, so the file will be at /config/mcp-servers.json
-	configPath := filepath.Join(configDir, "mcp-servers.json")
-	configData, err := json.MarshalIndent(mcpServers, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal MCP server config: %w", err)
-	}
-
-	if err := os.WriteFile(configPath, configData, 0644); err != nil {
-		return fmt.Errorf("failed to write MCP server config file: %w", err)
-	}
-
-	if verbose {
-		fmt.Printf("Wrote MCP server config for agent %s version %s to %s\n", manifest.Name, version, configPath)
-	}
-
-	return nil
-}
-
-// cleanupResolvedMCPServerConfig cleans up the resolved MCP server config directory.
-// Used in the case that no registry-type MCP servers are present to ensure there is no previously-existing config.
-func cleanupResolvedMCPServerConfig(tempDir string, agentName string, version string, verbose bool) error {
-	var configDir string
-	if version != "" {
-		sanitizedVersion := utils.SanitizeVersion(version)
-		configDir = filepath.Join(tempDir, agentName, sanitizedVersion)
-	} else {
-		configDir = filepath.Join(tempDir, agentName)
-	}
-
-	configPath := filepath.Join(configDir, "mcp-servers.json")
-	if err := os.Remove(configPath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove MCP server config file: %w", err)
-	}
-
-	if verbose {
-		fmt.Printf("Cleaned up resolved MCP server config for agent %s version %s\n", agentName, version)
 	}
 
 	return nil

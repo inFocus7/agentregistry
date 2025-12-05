@@ -198,15 +198,8 @@ func EnsureMcpServerDirectories(projectDir string, manifest *common.AgentManifes
 
 	// Clean up registry/ folder to ensure fresh state for registry-resolved servers.
 	// This prevents stale configs from previous runs with different resolved registries.
-	registryDir := filepath.Join(projectDir, "registry")
-	if _, err := os.Stat(registryDir); err == nil {
-		if err := os.RemoveAll(registryDir); err != nil {
-			return fmt.Errorf("failed to clean up registry directory: %w", err)
-		}
-
-		if verbose {
-			fmt.Println("Cleaned up registry/ folder for fresh server configs")
-		}
+	if err := CleanupRegistryDir(projectDir, verbose); err != nil {
+		return err
 	}
 
 	gen := python.NewPythonGenerator()
@@ -294,6 +287,29 @@ func EnsureMcpServerDirectories(projectDir string, manifest *common.AgentManifes
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// CleanupRegistryDir removes the generated registry directory if it exists.
+// This keeps registry-resolved MCP server artifacts from sticking around across runs.
+func CleanupRegistryDir(projectDir string, verbose bool) error {
+	registryDir := filepath.Join(projectDir, "registry")
+
+	// If the directory does not exist, nothing to do.
+	if _, err := os.Stat(registryDir); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to stat registry directory: %w", err)
+	}
+
+	if err := os.RemoveAll(registryDir); err != nil {
+		return fmt.Errorf("failed to clean up registry directory: %w", err)
+	}
+
+	if verbose {
+		fmt.Println("Cleaned up registry/ folder for fresh server configs")
+	}
+	return nil
 }
 
 // ResolveProjectDir resolves the project directory path
