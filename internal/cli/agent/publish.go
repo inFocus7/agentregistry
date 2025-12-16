@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/agentregistry-dev/agentregistry/internal/cli/agent/frameworks/common"
-	"github.com/agentregistry-dev/agentregistry/internal/models"
 	"github.com/kagent-dev/kagent/go/cli/config"
 	"github.com/spf13/cobra"
 )
@@ -39,7 +37,7 @@ func runPublish(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
 	}
 	cfg := &config.Config{}
-	publishCfg := &publishAgentCfg{
+	publishCfg := &agentCfg{
 		Config: cfg,
 	}
 	publishCfg.Version = publishVersion
@@ -69,51 +67,28 @@ func runPublish(cmd *cobra.Command, args []string) error {
 	if fi, err := os.Stat(arg); err == nil && fi.IsDir() {
 		publishCfg.ProjectDir = arg
 		publishCfg.Version = "latest"
-		return publishAgent(publishCfg)
+		jsn, err := createAgentJSONFromCfg(publishCfg)
+		if err != nil {
+			return fmt.Errorf("failed to create agent JSON: %w", err)
+		}
+
+		// Push the agent (creates unpublished entry)
+		if _, err := apiClient.PushAgent(jsn); err != nil {
+			return fmt.Errorf("failed to push agent: %w", err)
+		}
+
+		// Auto-approve the agent
+		// TODO(infocus7): For enterprise, we WILL NOT want to auto-approve the agent.
+		if err := apiClient.ApproveAgentStatus(jsn.Name, jsn.Version, "Auto-approved via publish command"); err != nil {
+			return fmt.Errorf("failed to approve agent: %w", err)
+		}
+
+		// Mark the agent as published
+		if err := apiClient.PublishAgentStatus(jsn.Name, jsn.Version); err != nil {
+			return fmt.Errorf("failed to publish agent: %w", err)
+		}
+
+		return nil
 	}
-	return nil
-}
-
-type publishAgentCfg struct {
-	Config     *config.Config
-	ProjectDir string
-	Version    string
-}
-
-func publishAgent(cfg *publishAgentCfg) error {
-	// Validate project directory
-	if cfg.ProjectDir == "" {
-		return fmt.Errorf("project directory is required")
-	}
-
-	// Check if project directory exists
-	if _, err := os.Stat(cfg.ProjectDir); os.IsNotExist(err) {
-		return fmt.Errorf("project directory does not exist: %s", cfg.ProjectDir)
-	}
-
-	version := "latest"
-	if cfg.Version != "" {
-		version = cfg.Version
-	}
-
-	mgr := common.NewManifestManager(cfg.ProjectDir)
-	manifest, err := mgr.Load()
-	if err != nil {
-		return fmt.Errorf("failed to load manifest: %w", err)
-	}
-
-	jsn := &models.AgentJSON{
-		AgentManifest: *manifest,
-		Version:       version,
-		Status:        "active",
-	}
-
-	_, err = apiClient.PublishAgent(jsn)
-	if err != nil {
-		return fmt.Errorf("failed to publish agent: %w", err)
-	}
-
-	fmt.Printf("Agent '%s' version %s published successfully\n", jsn.Name, jsn.Version)
-
-	return nil
+	return fmt.Errorf("invalid argument: %s must be a directory", arg)
 }

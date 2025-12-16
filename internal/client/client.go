@@ -439,19 +439,50 @@ func (c *Client) PublishSkillStatus(name, version string) error {
 	return c.doJSON(req, nil)
 }
 
-// PublishSkill creates a skill entry and marks it as published (published=true)
-func (c *Client) PublishSkill(skill *models.SkillJSON) (*models.SkillResponse, error) {
-	if _, err := c.PushSkill(skill); err != nil {
-		return nil, err
+// ApproveSkillStatus marks an existing skill as approved
+func (c *Client) ApproveSkillStatus(name, version string, reason string) error {
+	encName := url.PathEscape(name)
+	encVersion := url.PathEscape(version)
+
+	base := c.baseURLWithoutVersion()
+	fullURL := strings.TrimRight(base, "/") + "/admin/v0/skills/" + encName + "/versions/" + encVersion + "/approve"
+	req, err := http.NewRequest(http.MethodPost, fullURL, nil)
+	if err != nil {
+		return err
 	}
 
-	// Then mark it as published
-	if err := c.PublishSkillStatus(skill.Name, skill.Version); err != nil {
-		return nil, fmt.Errorf("failed to publish skill: %w", err)
+	body := map[string]string{"reason": reason}
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request body: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
+	return c.doJSON(req, nil)
+}
+
+// DenySkillStatus marks an existing skill as denied
+func (c *Client) DenySkillStatus(name, version string, reason string) error {
+	encName := url.PathEscape(name)
+	encVersion := url.PathEscape(version)
+
+	base := c.baseURLWithoutVersion()
+	fullURL := strings.TrimRight(base, "/") + "/admin/v0/skills/" + encName + "/versions/" + encVersion + "/deny"
+	req, err := http.NewRequest(http.MethodPost, fullURL, nil)
+	if err != nil {
+		return err
 	}
 
-	// Fetch the updated skill to return it
-	return c.GetSkillByNameAndVersion(skill.Name, skill.Version)
+	body := map[string]string{"reason": reason}
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request body: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
+	return c.doJSON(req, nil)
 }
 
 // PushAgent creates an agent entry in the registry without publishing (published=false)
@@ -474,6 +505,52 @@ func (c *Client) PublishAgentStatus(name, version string) error {
 	return c.doJSON(req, nil)
 }
 
+// ApproveAgentStatus marks an existing agent as approved
+func (c *Client) ApproveAgentStatus(name, version string, reason string) error {
+	encName := url.PathEscape(name)
+	encVersion := url.PathEscape(version)
+
+	base := c.baseURLWithoutVersion()
+	fullURL := strings.TrimRight(base, "/") + "/admin/v0/agents/" + encName + "/versions/" + encVersion + "/approve"
+	req, err := http.NewRequest(http.MethodPost, fullURL, nil)
+	if err != nil {
+		return err
+	}
+
+	body := map[string]string{"reason": reason}
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request body: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
+	return c.doJSON(req, nil)
+}
+
+// DenyAgentStatus marks an existing agent as denied
+func (c *Client) DenyAgentStatus(name, version string, reason string) error {
+	encName := url.PathEscape(name)
+	encVersion := url.PathEscape(version)
+
+	base := c.baseURLWithoutVersion()
+	fullURL := strings.TrimRight(base, "/") + "/admin/v0/agents/" + encName + "/versions/" + encVersion + "/deny"
+	req, err := http.NewRequest(http.MethodPost, fullURL, nil)
+	if err != nil {
+		return err
+	}
+
+	body := map[string]string{"reason": reason}
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request body: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
+	return c.doJSON(req, nil)
+}
+
 // UnpublishAgentStatus marks an existing agent as unpublished (sets published=false)
 func (c *Client) UnpublishAgentStatus(name, version string) error {
 	encName := url.PathEscape(name)
@@ -484,22 +561,6 @@ func (c *Client) UnpublishAgentStatus(name, version string) error {
 		return err
 	}
 	return c.doJSON(req, nil)
-}
-
-// PublishAgent creates an agent entry and marks it as published (published=true)
-func (c *Client) PublishAgent(agent *models.AgentJSON) (*models.AgentResponse, error) {
-	// First create the agent (published=false)
-	if _, err := c.PushAgent(agent); err != nil {
-		return nil, err
-	}
-
-	// Then mark it as published
-	if err := c.PublishAgentStatus(agent.Name, agent.Version); err != nil {
-		return nil, fmt.Errorf("failed to publish agent: %w", err)
-	}
-
-	// Fetch the updated agent to return it
-	return c.GetAgentByNameAndVersion(agent.Name, agent.Version)
 }
 
 // PushMCPServer creates an MCP server entry in the registry without publishing (published=false)
@@ -521,20 +582,50 @@ func (c *Client) PublishMCPServerStatus(name, version string) error {
 	return c.doJSON(req, nil)
 }
 
-// PublishMCPServer creates an MCP server entry and marks it as published (published=true)
-func (c *Client) PublishMCPServer(server *v0.ServerJSON) (*v0.ServerResponse, error) {
-	// First create the server (published=false)
-	if _, err := c.PushMCPServer(server); err != nil {
-		return nil, err
+// ApproveMCPServerStatus marks an existing MCP server as approved
+func (c *Client) ApproveMCPServerStatus(name, version string, reason string) error {
+	encName := url.PathEscape(name)
+	encVersion := url.PathEscape(version)
+
+	base := c.baseURLWithoutVersion()
+	fullURL := strings.TrimRight(base, "/") + "/admin/v0/servers/" + encName + "/versions/" + encVersion + "/approve"
+	req, err := http.NewRequest(http.MethodPost, fullURL, nil)
+	if err != nil {
+		return err
 	}
 
-	// Then mark it as published
-	if err := c.PublishMCPServerStatus(server.Name, server.Version); err != nil {
-		return nil, fmt.Errorf("failed to publish mcp server: %w", err)
+	body := map[string]string{"reason": reason}
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request body: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
+	return c.doJSON(req, nil)
+}
+
+// DenyMCPServerStatus marks an existing MCP server as denied
+func (c *Client) DenyMCPServerStatus(name, version string, reason string) error {
+	encName := url.PathEscape(name)
+	encVersion := url.PathEscape(version)
+
+	base := c.baseURLWithoutVersion()
+	fullURL := strings.TrimRight(base, "/") + "/admin/v0/servers/" + encName + "/versions/" + encVersion + "/deny"
+	req, err := http.NewRequest(http.MethodPost, fullURL, nil)
+	if err != nil {
+		return err
 	}
 
-	// Fetch the published server to return it
-	return c.GetServerByNameAndVersion(server.Name, server.Version, true)
+	body := map[string]string{"reason": reason}
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request body: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
+	return c.doJSON(req, nil)
 }
 
 // UnpublishMCPServer unpublishes an MCP server from the registry
