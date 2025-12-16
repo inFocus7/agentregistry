@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/kagent-dev/kagent/go/cli/config"
+	"github.com/modelcontextprotocol/registry/pkg/model"
 	"github.com/spf13/cobra"
 )
 
@@ -27,9 +28,11 @@ arctl agent publish my-agent --version latest`,
 }
 
 var publishVersion string
+var githubRepository string
 
 func init() {
 	PublishCmd.Flags().StringVar(&publishVersion, "version", "", "Specify version to publish (when publishing an existing registry agent)")
+	PublishCmd.Flags().StringVar(&githubRepository, "github", "", "Specify the GitHub repository for the agent")
 }
 
 func runPublish(cmd *cobra.Command, args []string) error {
@@ -41,6 +44,7 @@ func runPublish(cmd *cobra.Command, args []string) error {
 		Config: cfg,
 	}
 	publishCfg.Version = publishVersion
+	publishCfg.GitHubRepository = githubRepository
 
 	arg := args[0]
 
