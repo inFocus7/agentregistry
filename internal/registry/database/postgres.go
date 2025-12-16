@@ -133,6 +133,11 @@ func (db *PostgreSQL) ListServers(
 			args = append(args, *filter.IsLatest)
 			argIndex++
 		}
+		if filter.ApprovalStatus != nil {
+			whereConditions = append(whereConditions, fmt.Sprintf("approval_status = $%d", argIndex))
+			args = append(args, *filter.ApprovalStatus)
+			argIndex++
+		}
 		if filter.Published != nil {
 			whereConditions = append(whereConditions, fmt.Sprintf("published = $%d", argIndex))
 			args = append(args, *filter.Published)
@@ -292,7 +297,7 @@ func (db *PostgreSQL) GetServerByNameAndVersion(ctx context.Context, tx pgx.Tx, 
 	`
 
 	if publishedOnly {
-		query += ` AND published = true`
+		query += ` AND published = true AND approval_status = 'APPROVED'`
 	}
 
 	query += `
@@ -336,7 +341,7 @@ func (db *PostgreSQL) GetServerByNameAndVersion(ctx context.Context, tx pgx.Tx, 
 }
 
 // GetAllVersionsByServerName retrieves all versions of a server by server name
-// If publishedOnly is true, only returns versions where published = true
+// If publishedOnly is true, only returns versions where published = true and approval_status = 'APPROVED'
 func (db *PostgreSQL) GetAllVersionsByServerName(ctx context.Context, tx pgx.Tx, serverName string, publishedOnly bool) ([]*apiv0.ServerResponse, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
@@ -348,7 +353,7 @@ func (db *PostgreSQL) GetAllVersionsByServerName(ctx context.Context, tx pgx.Tx,
 		WHERE server_name = $1`
 
 	if publishedOnly {
-		query += ` AND published = true`
+		query += ` AND published = true AND approval_status = 'APPROVED'`
 	}
 
 	query += `
@@ -776,21 +781,84 @@ func (db *PostgreSQL) UnpublishServer(ctx context.Context, tx pgx.Tx, serverName
 	return nil
 }
 
+// ApproveServer marks a server as approved
+func (db *PostgreSQL) ApproveServer(ctx context.Context, tx pgx.Tx, serverName, version string, reason string) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	executor := db.getExecutor(tx)
+	query := `UPDATE servers SET approval_status = 'APPROVED', approval_date = NOW(), reason = $3 WHERE server_name = $1 AND version = $2`
+
+	result, err := executor.Exec(ctx, query, serverName, version, reason)
+	if err != nil {
+		return fmt.Errorf("failed to approve server: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+// DenyServer marks a server as denied
+func (db *PostgreSQL) DenyServer(ctx context.Context, tx pgx.Tx, serverName, version string, reason string) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	executor := db.getExecutor(tx)
+	query := `UPDATE servers SET approval_status = 'DENIED', approval_date = NOW(), reason = $3 WHERE server_name = $1 AND version = $2`
+
+	result, err := executor.Exec(ctx, query, serverName, version, reason)
+	if err != nil {
+		return fmt.Errorf("failed to deny server: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+// GetServerApprovalStatus gets the approval status of a server
+func (db *PostgreSQL) GetServerApprovalStatus(ctx context.Context, tx pgx.Tx, serverName, version string) (string, error) {
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+
+	executor := db.getExecutor(tx)
+	query := `SELECT approval_status FROM servers WHERE server_name = $1 AND version = $2`
+
+	var approvalStatus string
+	err := executor.QueryRow(ctx, query, serverName, version).Scan(&approvalStatus)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ErrNotFound
+		}
+		return "", fmt.Errorf("failed to get server approval status: %w", err)
+	}
+
+	return approvalStatus, nil
+}
+
 // DeleteServer permanently removes a server version from the database
 func (db *PostgreSQL) DeleteServer(ctx context.Context, tx pgx.Tx, serverName, version string) error {
-    if ctx.Err() != nil {
-        return ctx.Err()
-    }
-    executor := db.getExecutor(tx)
-    query := `DELETE FROM servers WHERE server_name = $1 AND version = $2`
-    result, err := executor.Exec(ctx, query, serverName, version)
-    if err != nil {
-        return fmt.Errorf("failed to delete server: %w", err)
-    }
-    if result.RowsAffected() == 0 {
-        return ErrNotFound
-    }
-    return nil
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	executor := db.getExecutor(tx)
+	query := `DELETE FROM servers WHERE server_name = $1 AND version = $2`
+	result, err := executor.Exec(ctx, query, serverName, version)
+	if err != nil {
+		return fmt.Errorf("failed to delete server: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // IsServerPublished checks if a server is published
@@ -964,6 +1032,11 @@ func (db *PostgreSQL) ListAgents(ctx context.Context, tx pgx.Tx, filter *AgentFi
 		if filter.IsLatest != nil {
 			whereConditions = append(whereConditions, fmt.Sprintf("is_latest = $%d", argIndex))
 			args = append(args, *filter.IsLatest)
+			argIndex++
+		}
+		if filter.ApprovalStatus != nil {
+			whereConditions = append(whereConditions, fmt.Sprintf("approval_status = $%d", argIndex))
+			args = append(args, *filter.ApprovalStatus)
 			argIndex++
 		}
 		if filter.Published != nil {
@@ -1430,6 +1503,69 @@ func (db *PostgreSQL) IsAgentPublished(ctx context.Context, tx pgx.Tx, agentName
 	return published, nil
 }
 
+// ApproveAgent marks an agent as approved
+func (db *PostgreSQL) ApproveAgent(ctx context.Context, tx pgx.Tx, agentName, version string, reason string) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	executor := db.getExecutor(tx)
+	query := `UPDATE agents SET approval_status = 'APPROVED', approval_date = NOW(), reason = $3 WHERE agent_name = $1 AND version = $2`
+
+	result, err := executor.Exec(ctx, query, agentName, version, reason)
+	if err != nil {
+		return fmt.Errorf("failed to approve agent: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+// DenyAgent marks an agent as denied
+func (db *PostgreSQL) DenyAgent(ctx context.Context, tx pgx.Tx, agentName, version string, reason string) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	executor := db.getExecutor(tx)
+	query := `UPDATE agents SET approval_status = 'DENIED', approval_date = NOW(), reason = $3 WHERE agent_name = $1 AND version = $2`
+
+	result, err := executor.Exec(ctx, query, agentName, version, reason)
+	if err != nil {
+		return fmt.Errorf("failed to deny agent: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+// GetAgentApprovalStatus gets the approval status of an agent
+func (db *PostgreSQL) GetAgentApprovalStatus(ctx context.Context, tx pgx.Tx, agentName, version string) (string, error) {
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+
+	executor := db.getExecutor(tx)
+	query := `SELECT approval_status FROM agents WHERE agent_name = $1 AND version = $2`
+
+	var approvalStatus string
+	err := executor.QueryRow(ctx, query, agentName, version).Scan(&approvalStatus)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ErrNotFound
+		}
+		return "", fmt.Errorf("failed to get agent approval status: %w", err)
+	}
+
+	return approvalStatus, nil
+}
+
 // ==============================
 // Skills implementations
 // ==============================
@@ -1476,6 +1612,11 @@ func (db *PostgreSQL) ListSkills(ctx context.Context, tx pgx.Tx, filter *SkillFi
 		if filter.IsLatest != nil {
 			whereConditions = append(whereConditions, fmt.Sprintf("is_latest = $%d", argIndex))
 			args = append(args, *filter.IsLatest)
+			argIndex++
+		}
+		if filter.ApprovalStatus != nil {
+			whereConditions = append(whereConditions, fmt.Sprintf("approval_status = $%d", argIndex))
+			args = append(args, *filter.ApprovalStatus)
 			argIndex++
 		}
 		if filter.Published != nil {
@@ -1942,6 +2083,69 @@ func (db *PostgreSQL) IsSkillPublished(ctx context.Context, tx pgx.Tx, skillName
 	}
 
 	return published, nil
+}
+
+// ApproveSkill marks a skill as approved
+func (db *PostgreSQL) ApproveSkill(ctx context.Context, tx pgx.Tx, skillName, version string, reason string) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	executor := db.getExecutor(tx)
+	query := `UPDATE skills SET approval_status = 'APPROVED', approval_date = NOW(), reason = $3 WHERE skill_name = $1 AND version = $2`
+
+	result, err := executor.Exec(ctx, query, skillName, version, reason)
+	if err != nil {
+		return fmt.Errorf("failed to approve skill: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+// DenySkill marks a skill as denied
+func (db *PostgreSQL) DenySkill(ctx context.Context, tx pgx.Tx, skillName, version string, reason string) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	executor := db.getExecutor(tx)
+	query := `UPDATE skills SET approval_status = 'DENIED', approval_date = NOW(), reason = $3 WHERE skill_name = $1 AND version = $2`
+
+	result, err := executor.Exec(ctx, query, skillName, version, reason)
+	if err != nil {
+		return fmt.Errorf("failed to deny skill: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+// GetSkillApprovalStatus gets the approval status of a skill
+func (db *PostgreSQL) GetSkillApprovalStatus(ctx context.Context, tx pgx.Tx, skillName, version string) (string, error) {
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+
+	executor := db.getExecutor(tx)
+	query := `SELECT approval_status FROM skills WHERE skill_name = $1 AND version = $2`
+
+	var approvalStatus string
+	err := executor.QueryRow(ctx, query, skillName, version).Scan(&approvalStatus)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ErrNotFound
+		}
+		return "", fmt.Errorf("failed to get skill approval status: %w", err)
+	}
+
+	return approvalStatus, nil
 }
 
 // CreateDeployment creates a new deployment record

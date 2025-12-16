@@ -22,13 +22,14 @@ var (
 
 // ServerFilter defines filtering options for server queries
 type ServerFilter struct {
-	Name          *string    // for finding versions of same server
-	RemoteURL     *string    // for duplicate URL detection
-	UpdatedSince  *time.Time // for incremental sync filtering
-	SubstringName *string    // for substring search on name
-	Version       *string    // for exact version matching
-	IsLatest      *bool      // for filtering latest versions only
-	Published     *bool      // for filtering by published status (nil = no filter)
+	Name           *string    // for finding versions of same server
+	RemoteURL      *string    // for duplicate URL detection
+	UpdatedSince   *time.Time // for incremental sync filtering
+	SubstringName  *string    // for substring search on name
+	Version        *string    // for exact version matching
+	IsLatest       *bool      // for filtering latest versions only
+	Published      *bool      // for filtering by published status (nil = no filter)
+	ApprovalStatus *string    // for filtering by approval status (nil = no filter)
 }
 
 // ServerReadme represents a stored README blob for a server version
@@ -44,24 +45,26 @@ type ServerReadme struct {
 
 // SkillFilter defines filtering options for skill queries (mirrors ServerFilter)
 type SkillFilter struct {
-	Name          *string    // for finding versions of same skill
-	RemoteURL     *string    // for duplicate URL detection
-	UpdatedSince  *time.Time // for incremental sync filtering
-	SubstringName *string    // for substring search on name
-	Version       *string    // for exact version matching
-	IsLatest      *bool      // for filtering latest versions only
-	Published     *bool      // for filtering by published status (nil = no filter)
+	Name           *string    // for finding versions of same skill
+	RemoteURL      *string    // for duplicate URL detection
+	UpdatedSince   *time.Time // for incremental sync filtering
+	SubstringName  *string    // for substring search on name
+	Version        *string    // for exact version matching
+	IsLatest       *bool      // for filtering latest versions only
+	Published      *bool      // for filtering by published status (nil = no filter)
+	ApprovalStatus *string    // for filtering by approval status (nil = no filter)
 }
 
 // AgentFilter defines filtering options for agent queries (mirrors ServerFilter)
 type AgentFilter struct {
-	Name          *string    // for finding versions of same agent
-	RemoteURL     *string    // for duplicate URL detection
-	UpdatedSince  *time.Time // for incremental sync filtering
-	SubstringName *string    // for substring search on name
-	Version       *string    // for exact version matching
-	IsLatest      *bool      // for filtering latest versions only
-	Published     *bool      // for filtering by published status (nil = no filter)
+	Name           *string    // for finding versions of same agent
+	RemoteURL      *string    // for duplicate URL detection
+	UpdatedSince   *time.Time // for incremental sync filtering
+	SubstringName  *string    // for substring search on name
+	Version        *string    // for exact version matching
+	IsLatest       *bool      // for filtering latest versions only
+	Published      *bool      // for filtering by published status (nil = no filter)
+	ApprovalStatus *string    // for filtering by approval status (nil = no filter)
 }
 
 // Database defines the interface for database operations
@@ -99,6 +102,12 @@ type Database interface {
 	UnpublishServer(ctx context.Context, tx pgx.Tx, serverName, version string) error
 	// IsServerPublished checks if a server is published
 	IsServerPublished(ctx context.Context, tx pgx.Tx, serverName, version string) (bool, error)
+	// ApproveServer marks a server as approved
+	ApproveServer(ctx context.Context, tx pgx.Tx, serverName, version string, reason string) error
+	// DenyServer marks a server as denied
+	DenyServer(ctx context.Context, tx pgx.Tx, serverName, version string, reason string) error
+	// GetServerApprovalStatus gets the approval status of a server
+	GetServerApprovalStatus(ctx context.Context, tx pgx.Tx, serverName, version string) (string, error)
 	// UpsertServerReadme stores or updates a README blob for a server version
 	UpsertServerReadme(ctx context.Context, tx pgx.Tx, readme *ServerReadme) error
 	// GetServerReadme retrieves the README blob for a specific server version
@@ -139,6 +148,12 @@ type Database interface {
 	UnpublishAgent(ctx context.Context, tx pgx.Tx, agentName, version string) error
 	// IsAgentPublished checks if an agent is published
 	IsAgentPublished(ctx context.Context, tx pgx.Tx, agentName, version string) (bool, error)
+	// ApproveAgent marks an agent as approved
+	ApproveAgent(ctx context.Context, tx pgx.Tx, agentName, version string, reason string) error
+	// DenyAgent marks an agent as denied
+	DenyAgent(ctx context.Context, tx pgx.Tx, agentName, version string, reason string) error
+	// GetAgentApprovalStatus gets the approval status of an agent
+	GetAgentApprovalStatus(ctx context.Context, tx pgx.Tx, agentName, version string) (string, error)
 	// DeleteAgent permanently removes an agent version from the database
 	DeleteAgent(ctx context.Context, tx pgx.Tx, agentName, version string) error
 
@@ -171,6 +186,12 @@ type Database interface {
 	UnpublishSkill(ctx context.Context, tx pgx.Tx, skillName, version string) error
 	// IsSkillPublished checks if a skill is published
 	IsSkillPublished(ctx context.Context, tx pgx.Tx, skillName, version string) (bool, error)
+	// ApproveSkill marks a skill as approved
+	ApproveSkill(ctx context.Context, tx pgx.Tx, skillName, version string, reason string) error
+	// DenySkill marks a skill as denied
+	DenySkill(ctx context.Context, tx pgx.Tx, skillName, version string, reason string) error
+	// GetSkillApprovalStatus gets the approval status of a skill
+	GetSkillApprovalStatus(ctx context.Context, tx pgx.Tx, skillName, version string) (string, error)
 
 	// Deployments API
 	// CreateDeployment creates a new deployment record

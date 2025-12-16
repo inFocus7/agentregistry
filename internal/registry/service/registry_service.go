@@ -326,6 +326,20 @@ func (s *registryServiceImpl) PublishSkill(ctx context.Context, skillName, versi
 	})
 }
 
+// ApproveSkill marks a skill as approved
+func (s *registryServiceImpl) ApproveSkill(ctx context.Context, skillName, version string, reason string) error {
+	return s.db.InTransaction(ctx, func(txCtx context.Context, tx pgx.Tx) error {
+		return s.db.ApproveSkill(txCtx, tx, skillName, version, reason)
+	})
+}
+
+// DenySkill marks a skill as denied
+func (s *registryServiceImpl) DenySkill(ctx context.Context, skillName, version string, reason string) error {
+	return s.db.InTransaction(ctx, func(txCtx context.Context, tx pgx.Tx) error {
+		return s.db.DenySkill(txCtx, tx, skillName, version, reason)
+	})
+}
+
 // UnpublishSkill marks a skill as unpublished
 func (s *registryServiceImpl) UnpublishSkill(ctx context.Context, skillName, version string) error {
 	return s.db.InTransaction(ctx, func(txCtx context.Context, tx pgx.Tx) error {
@@ -434,6 +448,20 @@ func (s *registryServiceImpl) GetServerReadmeByVersion(ctx context.Context, serv
 func (s *registryServiceImpl) PublishServer(ctx context.Context, serverName, version string) error {
 	return s.db.InTransaction(ctx, func(txCtx context.Context, tx pgx.Tx) error {
 		return s.db.PublishServer(txCtx, tx, serverName, version)
+	})
+}
+
+// ApproveServer marks a server as approved
+func (s *registryServiceImpl) ApproveServer(ctx context.Context, serverName, version string, reason string) error {
+	return s.db.InTransaction(ctx, func(txCtx context.Context, tx pgx.Tx) error {
+		return s.db.ApproveServer(txCtx, tx, serverName, version, reason)
+	})
+}
+
+// DenyServer marks a server as denied
+func (s *registryServiceImpl) DenyServer(ctx context.Context, serverName, version string, reason string) error {
+	return s.db.InTransaction(ctx, func(txCtx context.Context, tx pgx.Tx) error {
+		return s.db.DenyServer(txCtx, tx, serverName, version, reason)
 	})
 }
 
@@ -606,6 +634,20 @@ func (s *registryServiceImpl) createAgentInTransaction(ctx context.Context, tx p
 func (s *registryServiceImpl) PublishAgent(ctx context.Context, agentName, version string) error {
 	return s.db.InTransaction(ctx, func(txCtx context.Context, tx pgx.Tx) error {
 		return s.db.PublishAgent(txCtx, tx, agentName, version)
+	})
+}
+
+// ApproveAgent marks an agent as approved
+func (s *registryServiceImpl) ApproveAgent(ctx context.Context, agentName, version string, reason string) error {
+	return s.db.InTransaction(ctx, func(txCtx context.Context, tx pgx.Tx) error {
+		return s.db.ApproveAgent(txCtx, tx, agentName, version, reason)
+	})
+}
+
+// DenyAgent marks an agent as denied
+func (s *registryServiceImpl) DenyAgent(ctx context.Context, agentName, version string, reason string) error {
+	return s.db.InTransaction(ctx, func(txCtx context.Context, tx pgx.Tx) error {
+		return s.db.DenyAgent(txCtx, tx, agentName, version, reason)
 	})
 }
 

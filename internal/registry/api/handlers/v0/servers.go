@@ -56,7 +56,7 @@ type ServerReadmeResponse struct {
 }
 
 // RegisterServersEndpoints registers all server-related endpoints with a custom path prefix
-// isAdmin: if true, shows all resources; if false, only shows published resources
+// isAdmin: if true, shows all resources; if false, only shows approved published resources
 func RegisterServersEndpoints(api huma.API, pathPrefix string, registry service.RegistryService, isAdmin bool) {
 	if isAdmin {
 		huma.Register(api, huma.Operation{
@@ -124,10 +124,12 @@ func RegisterServersEndpoints(api huma.API, pathPrefix string, registry service.
 		// Build filter from input parameters
 		filter := &database.ServerFilter{}
 
-		// For public endpoints, only show published resources
+		// For public endpoints, only show approved published resources
 		if !isAdmin {
 			published := true
 			filter.Published = &published
+			approvalStatus := "APPROVED"
+			filter.ApprovalStatus = &approvalStatus
 		}
 
 		// Parse updated_since parameter
@@ -530,6 +532,96 @@ func RegisterPublishStatusEndpoints(api huma.API, pathPrefix string, registry se
 		return &Response[EmptyResponse]{
 			Body: EmptyResponse{
 				Message: "Server unpublished successfully",
+			},
+		}, nil
+	})
+}
+
+// ApproveServerInput represents the input for approving a server
+type ApproveServerInput struct {
+	ServerName string `path:"serverName"`
+	Version    string `path:"version"`
+	Body       struct {
+		Reason string `json:"reason" doc:"Reason for approval"`
+	} `body:""`
+}
+
+// DenyServerInput represents the input for denying a server
+type DenyServerInput struct {
+	ServerName string `path:"serverName"`
+	Version    string `path:"version"`
+	Body       struct {
+		Reason string `json:"reason" doc:"Reason for denial"`
+	} `body:""`
+}
+
+// RegisterAdminServersApprovalStatusEndpoints registers the approval status endpoints for servers
+// These endpoints change the approval status of existing servers and are only available to admins
+func RegisterAdminServersApprovalStatusEndpoints(api huma.API, pathPrefix string, registry service.RegistryService) {
+	// Approve server endpoint - marks an existing server as approved
+	huma.Register(api, huma.Operation{
+		OperationID: "approve-server-status" + strings.ReplaceAll(pathPrefix, "/", "-"),
+		Method:      http.MethodPost,
+		Path:        pathPrefix + "/servers/{serverName}/versions/{version}/approve",
+		Summary:     "Approve an existing server",
+		Description: "Mark an existing server version as approved, allowing it to be published. This acts on a server that was already created.",
+		Tags:        []string{"servers", "admin"},
+	}, func(ctx context.Context, input *ApproveServerInput) (*Response[EmptyResponse], error) {
+		// URL-decode the server name and version
+		serverName, err := url.PathUnescape(input.ServerName)
+		if err != nil {
+			return nil, huma.Error400BadRequest("Invalid server name encoding", err)
+		}
+		version, err := url.PathUnescape(input.Version)
+		if err != nil {
+			return nil, huma.Error400BadRequest("Invalid version encoding", err)
+		}
+
+		// Call the service to approve the server
+		if err := registry.ApproveServer(ctx, serverName, version, input.Body.Reason); err != nil {
+			if errors.Is(err, database.ErrNotFound) {
+				return nil, huma.Error404NotFound("Server not found")
+			}
+			return nil, huma.Error500InternalServerError("Failed to approve server", err)
+		}
+
+		return &Response[EmptyResponse]{
+			Body: EmptyResponse{
+				Message: "Server approved successfully",
+			},
+		}, nil
+	})
+
+	// Deny server endpoint - marks an existing server as denied
+	huma.Register(api, huma.Operation{
+		OperationID: "deny-server-status" + strings.ReplaceAll(pathPrefix, "/", "-"),
+		Method:      http.MethodPost,
+		Path:        pathPrefix + "/servers/{serverName}/versions/{version}/deny",
+		Summary:     "Deny an existing server",
+		Description: "Mark an existing server version as denied, preventing it from being published. This acts on a server that was already created.",
+		Tags:        []string{"servers", "admin"},
+	}, func(ctx context.Context, input *DenyServerInput) (*Response[EmptyResponse], error) {
+		// URL-decode the server name and version
+		serverName, err := url.PathUnescape(input.ServerName)
+		if err != nil {
+			return nil, huma.Error400BadRequest("Invalid server name encoding", err)
+		}
+		version, err := url.PathUnescape(input.Version)
+		if err != nil {
+			return nil, huma.Error400BadRequest("Invalid version encoding", err)
+		}
+
+		// Call the service to deny the server
+		if err := registry.DenyServer(ctx, serverName, version, input.Body.Reason); err != nil {
+			if errors.Is(err, database.ErrNotFound) {
+				return nil, huma.Error404NotFound("Server not found")
+			}
+			return nil, huma.Error500InternalServerError("Failed to deny server", err)
+		}
+
+		return &Response[EmptyResponse]{
+			Body: EmptyResponse{
+				Message: "Server denied successfully",
 			},
 		}, nil
 	})

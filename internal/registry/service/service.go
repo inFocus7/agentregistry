@@ -37,6 +37,10 @@ type RegistryService interface {
 	PublishServer(ctx context.Context, serverName, version string) error
 	// UnpublishServer marks a server as unpublished
 	UnpublishServer(ctx context.Context, serverName, version string) error
+	// ApproveServer marks a server as approved
+	ApproveServer(ctx context.Context, serverName, version string, reason string) error
+	// DenyServer marks a server as denied
+	DenyServer(ctx context.Context, serverName, version string, reason string) error
 	// DeleteServer permanently removes a server version from the registry
 	DeleteServer(ctx context.Context, serverName, version string) error
 
@@ -55,6 +59,10 @@ type RegistryService interface {
 	PublishAgent(ctx context.Context, agentName, version string) error
 	// UnpublishAgent marks an agent as unpublished
 	UnpublishAgent(ctx context.Context, agentName, version string) error
+	// ApproveAgent marks an agent as approved
+	ApproveAgent(ctx context.Context, agentName, version string, reason string) error
+	// DenyAgent marks an agent as denied
+	DenyAgent(ctx context.Context, agentName, version string, reason string) error
 	// DeleteAgent permanently removes an agent version from the registry
 	DeleteAgent(ctx context.Context, agentName, version string) error
 	// Skills APIs
@@ -72,6 +80,10 @@ type RegistryService interface {
 	PublishSkill(ctx context.Context, skillName, version string) error
 	// UnpublishSkill marks a skill as unpublished
 	UnpublishSkill(ctx context.Context, skillName, version string) error
+	// ApproveSkill marks a skill as approved
+	ApproveSkill(ctx context.Context, skillName, version string, reason string) error
+	// DenySkill marks a skill as denied
+	DenySkill(ctx context.Context, skillName, version string, reason string) error
 
 	// Deployments APIs
 	// GetDeployments retrieves all deployed resources (MCP servers, agents)

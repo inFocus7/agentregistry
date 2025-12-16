@@ -4,7 +4,6 @@
 -- Add approval_status columns to servers table
 ALTER TABLE servers ADD COLUMN IF NOT EXISTS approval_status VARCHAR(50) NOT NULL DEFAULT 'PENDING';
 ALTER TABLE servers ADD COLUMN IF NOT EXISTS approval_date TIMESTAMP WITH TIME ZONE;
-ALTER TABLE servers ADD COLUMN IF NOT EXISTS approved_by VARCHAR(255);
 ALTER TABLE servers ADD COLUMN IF NOT EXISTS reason TEXT;
 
 -- Create index on approval_status column for servers
@@ -17,7 +16,6 @@ ALTER TABLE servers ADD CONSTRAINT check_approval_status_valid
 -- Add approval_status columns to agents table
 ALTER TABLE agents ADD COLUMN IF NOT EXISTS approval_status VARCHAR(50) NOT NULL DEFAULT 'PENDING';
 ALTER TABLE agents ADD COLUMN IF NOT EXISTS approval_date TIMESTAMP WITH TIME ZONE;
-ALTER TABLE agents ADD COLUMN IF NOT EXISTS approved_by VARCHAR(255);
 ALTER TABLE agents ADD COLUMN IF NOT EXISTS reason TEXT;
 
 -- Create index on approval_status column for agents
@@ -30,7 +28,6 @@ ALTER TABLE agents ADD CONSTRAINT check_approval_status_valid
 -- Add approval_status columns to skills table
 ALTER TABLE skills ADD COLUMN IF NOT EXISTS approval_status VARCHAR(50) NOT NULL DEFAULT 'PENDING';
 ALTER TABLE skills ADD COLUMN IF NOT EXISTS approval_date TIMESTAMP WITH TIME ZONE;
-ALTER TABLE skills ADD COLUMN IF NOT EXISTS approved_by VARCHAR(255);
 ALTER TABLE skills ADD COLUMN IF NOT EXISTS reason TEXT;
 
 -- Create index on approval_status column for skills
