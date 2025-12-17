@@ -759,7 +759,8 @@ func TestServersApprovalEndpoints(t *testing.T) {
 	err = json.NewDecoder(initialW.Body).Decode(&initialResp)
 	assert.NoError(t, err)
 	require.Len(t, initialResp.Servers, 1)
-	assert.Equal(t, "PENDING", initialResp.Servers[0].Meta.ApprovalStatus, "New server should have PENDING approval status")
+	assert.Equal(t, "PENDING", initialResp.Servers[0].Meta.ApprovalStatus.Status, "New server should have PENDING approval status")
+	assert.Empty(t, initialResp.Servers[0].Meta.ApprovalStatus.Reason, "New server should have no approval reason")
 
 	t.Run("approve server", func(t *testing.T) {
 		encodedName := url.PathEscape(serverName)
@@ -790,7 +791,8 @@ func TestServersApprovalEndpoints(t *testing.T) {
 		err = json.NewDecoder(verifyW.Body).Decode(&verifyResp)
 		assert.NoError(t, err)
 		require.Len(t, verifyResp.Servers, 1)
-		assert.Equal(t, "APPROVED", verifyResp.Servers[0].Meta.ApprovalStatus, "Server should have APPROVED status after approval endpoint call")
+		assert.Equal(t, "APPROVED", verifyResp.Servers[0].Meta.ApprovalStatus.Status, "Server should have APPROVED status after approval endpoint call")
+		assert.Equal(t, "Test approval reason", verifyResp.Servers[0].Meta.ApprovalStatus.Reason, "Server should have the approval reason after approval endpoint call")
 	})
 
 	t.Run("deny server", func(t *testing.T) {
@@ -833,6 +835,7 @@ func TestServersApprovalEndpoints(t *testing.T) {
 		err = json.NewDecoder(verifyW.Body).Decode(&verifyResp)
 		assert.NoError(t, err)
 		require.Len(t, verifyResp.Servers, 1)
-		assert.Equal(t, "DENIED", verifyResp.Servers[0].Meta.ApprovalStatus, "Server should have DENIED status after deny endpoint call")
+		assert.Equal(t, "DENIED", verifyResp.Servers[0].Meta.ApprovalStatus.Status, "Server should have DENIED status after deny endpoint call")
+		assert.Equal(t, "Test denial reason", verifyResp.Servers[0].Meta.ApprovalStatus.Reason, "Server should have the denial reason after deny endpoint call")
 	})
 }

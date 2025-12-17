@@ -7,7 +7,7 @@ import (
 // ServerResponseMeta extends the external ResponseMeta with ApprovalStatus
 type ServerResponseMeta struct {
 	Official       *apiv0.RegistryExtensions `json:"io.modelcontextprotocol.registry/official,omitempty"`
-	ApprovalStatus string                    `json:"approvalStatus,omitempty"` // PENDING, APPROVED, or DENIED
+	ApprovalStatus ApprovalStatus            `json:"approvalStatus,omitempty"`
 }
 
 // ServerResponse wraps the external ServerResponse with our custom Meta

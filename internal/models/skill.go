@@ -45,7 +45,7 @@ type SkillRegistryExtensions struct {
 
 type SkillResponseMeta struct {
 	Official       *SkillRegistryExtensions `json:"io.modelcontextprotocol.registry/official,omitempty"`
-	ApprovalStatus string                   `json:"approvalStatus,omitempty"` // PENDING, APPROVED, or DENIED
+	ApprovalStatus ApprovalStatus           `json:"approvalStatus,omitempty"`
 }
 
 type SkillResponse struct {

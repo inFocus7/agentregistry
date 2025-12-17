@@ -752,11 +752,14 @@ func TestAgentsPublishedAndApprovalStatus(t *testing.T) {
 			require.NotNil(t, agent.Meta.Official, "Agent %s should have official metadata", tc.agentName)
 
 			if tc.shouldLeavePending {
-				assert.Equal(t, "PENDING", agent.Meta.ApprovalStatus, "Agent %s should have PENDING approval status", tc.agentName)
+				assert.Equal(t, "PENDING", agent.Meta.ApprovalStatus.Status, "Agent %s should have PENDING approval status", tc.agentName)
+				assert.Empty(t, agent.Meta.ApprovalStatus.Reason, "Agent %s should have no approval reason", tc.agentName)
 			} else if tc.shouldApprove {
-				assert.Equal(t, "APPROVED", agent.Meta.ApprovalStatus, "Agent %s should have APPROVED status", tc.agentName)
+				assert.Equal(t, "APPROVED", agent.Meta.ApprovalStatus.Status, "Agent %s should have APPROVED status", tc.agentName)
+				assert.Equal(t, "Test approval reason", agent.Meta.ApprovalStatus.Reason, "Agent %s should have the approval reason", tc.agentName)
 			} else {
-				assert.Equal(t, "DENIED", agent.Meta.ApprovalStatus, "Agent %s should have DENIED status", tc.agentName)
+				assert.Equal(t, "DENIED", agent.Meta.ApprovalStatus.Status, "Agent %s should have DENIED status", tc.agentName)
+				assert.Equal(t, "Test denial reason", agent.Meta.ApprovalStatus.Reason, "Agent %s should have the denial reason", tc.agentName)
 			}
 
 			// Verify published status
@@ -798,7 +801,8 @@ func TestAgentsApprovalEndpoints(t *testing.T) {
 	var initialResp agentmodels.AgentResponse
 	err = json.NewDecoder(initialW.Body).Decode(&initialResp)
 	assert.NoError(t, err)
-	assert.Equal(t, "PENDING", initialResp.Meta.ApprovalStatus, "New agent should have PENDING approval status")
+	assert.Equal(t, "PENDING", initialResp.Meta.ApprovalStatus.Status, "New agent should have PENDING approval status")
+	assert.Empty(t, initialResp.Meta.ApprovalStatus.Reason, "New agent should have no approval reason")
 
 	t.Run("approve agent", func(t *testing.T) {
 		encodedName := url.PathEscape(agentName)

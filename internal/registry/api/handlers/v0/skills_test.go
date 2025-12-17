@@ -581,10 +581,10 @@ func TestSkillsPublishedAndApprovalStatus(t *testing.T) {
 
 		if !tc.shouldLeavePending {
 			if tc.shouldApprove {
-				err = registryService.ApproveSkill(ctx, tc.skillName, tc.version, "Test approval")
+				err = registryService.ApproveSkill(ctx, tc.skillName, tc.version, "Test approval reason")
 				require.NoError(t, err, "Failed to approve skill %s", tc.skillName)
 			} else {
-				err = registryService.DenySkill(ctx, tc.skillName, tc.version, "Test denial")
+				err = registryService.DenySkill(ctx, tc.skillName, tc.version, "Test denial reason")
 				require.NoError(t, err, "Failed to deny skill %s", tc.skillName)
 			}
 		}
@@ -658,11 +658,14 @@ func TestSkillsPublishedAndApprovalStatus(t *testing.T) {
 			require.NotNil(t, skill.Meta.Official, "Skill %s should have official metadata", tc.skillName)
 
 			if tc.shouldLeavePending {
-				assert.Equal(t, "PENDING", skill.Meta.ApprovalStatus, "Skill %s should have PENDING approval status", tc.skillName)
+				assert.Equal(t, "PENDING", skill.Meta.ApprovalStatus.Status, "Skill %s should have PENDING approval status", tc.skillName)
+				assert.Empty(t, skill.Meta.ApprovalStatus.Reason, "Skill %s should have no approval reason", tc.skillName)
 			} else if tc.shouldApprove {
-				assert.Equal(t, "APPROVED", skill.Meta.ApprovalStatus, "Skill %s should have APPROVED status", tc.skillName)
+				assert.Equal(t, "APPROVED", skill.Meta.ApprovalStatus.Status, "Skill %s should have APPROVED status", tc.skillName)
+				assert.Equal(t, "Test approval reason", skill.Meta.ApprovalStatus.Reason, "Skill %s should have the approval reason", tc.skillName)
 			} else {
-				assert.Equal(t, "DENIED", skill.Meta.ApprovalStatus, "Skill %s should have DENIED status", tc.skillName)
+				assert.Equal(t, "DENIED", skill.Meta.ApprovalStatus.Status, "Skill %s should have DENIED status", tc.skillName)
+				assert.Equal(t, "Test denial reason", skill.Meta.ApprovalStatus.Reason, "Skill %s should have the denial reason", tc.skillName)
 			}
 
 			// Verify published status
@@ -700,7 +703,8 @@ func TestSkillsApprovalEndpoints(t *testing.T) {
 	var initialResp skillmodels.SkillResponse
 	err = json.NewDecoder(initialW.Body).Decode(&initialResp)
 	assert.NoError(t, err)
-	assert.Equal(t, "PENDING", initialResp.Meta.ApprovalStatus, "New skill should have PENDING approval status")
+	assert.Equal(t, "PENDING", initialResp.Meta.ApprovalStatus.Status, "New skill should have PENDING approval status")
+	assert.Empty(t, initialResp.Meta.ApprovalStatus.Reason, "New skill should have no approval reason")
 
 	t.Run("approve skill", func(t *testing.T) {
 		encodedName := url.PathEscape(skillName)
@@ -730,7 +734,8 @@ func TestSkillsApprovalEndpoints(t *testing.T) {
 		var verifyResp skillmodels.SkillResponse
 		err = json.NewDecoder(verifyW.Body).Decode(&verifyResp)
 		assert.NoError(t, err)
-		assert.Equal(t, "APPROVED", verifyResp.Meta.ApprovalStatus, "Skill should have APPROVED status after approval endpoint call")
+		assert.Equal(t, "APPROVED", verifyResp.Meta.ApprovalStatus.Status, "Skill should have APPROVED status after approval endpoint call")
+		assert.Equal(t, "Test approval reason", verifyResp.Meta.ApprovalStatus.Reason, "Skill should have the approval reason after approval endpoint call")
 	})
 
 	t.Run("deny skill", func(t *testing.T) {
@@ -770,6 +775,7 @@ func TestSkillsApprovalEndpoints(t *testing.T) {
 		var verifyResp skillmodels.SkillResponse
 		err = json.NewDecoder(verifyW.Body).Decode(&verifyResp)
 		assert.NoError(t, err)
-		assert.Equal(t, "DENIED", verifyResp.Meta.ApprovalStatus, "Skill should have DENIED status after deny endpoint call")
+		assert.Equal(t, "DENIED", verifyResp.Meta.ApprovalStatus.Status, "Skill should have DENIED status after deny endpoint call")
+		assert.Equal(t, "Test denial reason", verifyResp.Meta.ApprovalStatus.Reason, "Skill should have the denial reason after deny endpoint call")
 	})
 }
