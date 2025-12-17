@@ -16,17 +16,17 @@ type Reconciler interface {
 // RegistryService defines the interface for registry operations
 type RegistryService interface {
 	// ListServers retrieve all servers with optional filtering
-	ListServers(ctx context.Context, filter *database.ServerFilter, cursor string, limit int) ([]*apiv0.ServerResponse, string, error)
+	ListServers(ctx context.Context, filter *database.ServerFilter, cursor string, limit int) ([]*models.ServerResponse, string, error)
 	// GetServerByName retrieve latest version of a server by server name
-	GetServerByName(ctx context.Context, serverName string) (*apiv0.ServerResponse, error)
+	GetServerByName(ctx context.Context, serverName string) (*models.ServerResponse, error)
 	// GetServerByNameAndVersion retrieve specific version of a server by server name and version
-	GetServerByNameAndVersion(ctx context.Context, serverName string, version string, publishedOnly bool) (*apiv0.ServerResponse, error)
+	GetServerByNameAndVersion(ctx context.Context, serverName string, version string, publishedOnly bool) (*models.ServerResponse, error)
 	// GetAllVersionsByServerName retrieve all versions of a server by server name
-	GetAllVersionsByServerName(ctx context.Context, serverName string, publishedOnly bool) ([]*apiv0.ServerResponse, error)
+	GetAllVersionsByServerName(ctx context.Context, serverName string, publishedOnly bool) ([]*models.ServerResponse, error)
 	// CreateServer creates a new server version
-	CreateServer(ctx context.Context, req *apiv0.ServerJSON) (*apiv0.ServerResponse, error)
+	CreateServer(ctx context.Context, req *apiv0.ServerJSON) (*models.ServerResponse, error)
 	// UpdateServer updates an existing server and optionally its status
-	UpdateServer(ctx context.Context, serverName, version string, req *apiv0.ServerJSON, newStatus *string) (*apiv0.ServerResponse, error)
+	UpdateServer(ctx context.Context, serverName, version string, req *apiv0.ServerJSON, newStatus *string) (*models.ServerResponse, error)
 	// StoreServerReadme stores or updates the README for a server version
 	StoreServerReadme(ctx context.Context, serverName, version string, content []byte, contentType string) error
 	// GetServerReadmeLatest retrieves the README for the latest server version

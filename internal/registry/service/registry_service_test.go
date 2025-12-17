@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	models "github.com/agentregistry-dev/agentregistry/internal/models"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/config"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/database"
 	apiv0 "github.com/modelcontextprotocol/registry/pkg/api/v0"
@@ -154,13 +155,13 @@ func TestGetServerByName(t *testing.T) {
 		serverName  string
 		expectError bool
 		errorMsg    string
-		checkResult func(*testing.T, *apiv0.ServerResponse)
+		checkResult func(*testing.T, *models.ServerResponse)
 	}{
 		{
 			name:        "get latest version by server name",
 			serverName:  "com.example/test-server",
 			expectError: false,
-			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
+			checkResult: func(t *testing.T, result *models.ServerResponse) {
 				t.Helper()
 				assert.Equal(t, "2.0.0", result.Server.Version) // Should get latest version
 				assert.Equal(t, "Test server v2", result.Server.Description)
@@ -226,14 +227,14 @@ func TestGetServerByNameAndVersion(t *testing.T) {
 		version     string
 		expectError bool
 		errorMsg    string
-		checkResult func(*testing.T, *apiv0.ServerResponse)
+		checkResult func(*testing.T, *models.ServerResponse)
 	}{
 		{
 			name:        "get specific version 1.0.0",
 			serverName:  serverName,
 			version:     "1.0.0",
 			expectError: false,
-			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
+			checkResult: func(t *testing.T, result *models.ServerResponse) {
 				t.Helper()
 				assert.Equal(t, "1.0.0", result.Server.Version)
 				assert.Equal(t, "Versioned server v1", result.Server.Description)
@@ -245,7 +246,7 @@ func TestGetServerByNameAndVersion(t *testing.T) {
 			serverName:  serverName,
 			version:     "2.0.0",
 			expectError: false,
-			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
+			checkResult: func(t *testing.T, result *models.ServerResponse) {
 				t.Helper()
 				assert.Equal(t, "2.0.0", result.Server.Version)
 				assert.Equal(t, "Versioned server v2", result.Server.Description)
@@ -405,13 +406,13 @@ func TestGetAllVersionsByServerName(t *testing.T) {
 		serverName  string
 		expectError bool
 		errorMsg    string
-		checkResult func(*testing.T, []*apiv0.ServerResponse)
+		checkResult func(*testing.T, []*models.ServerResponse)
 	}{
 		{
 			name:        "get all versions of server",
 			serverName:  serverName,
 			expectError: false,
-			checkResult: func(t *testing.T, result []*apiv0.ServerResponse) {
+			checkResult: func(t *testing.T, result []*models.ServerResponse) {
 				t.Helper()
 				assert.Len(t, result, 3)
 
@@ -471,7 +472,7 @@ func TestCreateServerConcurrentVersionsNoRace(t *testing.T) {
 
 	const concurrency = 100
 	serverName := "com.example/test-concurrent"
-	results := make([]*apiv0.ServerResponse, concurrency)
+	results := make([]*models.ServerResponse, concurrency)
 	errors := make([]error, concurrency)
 
 	var wg sync.WaitGroup
@@ -548,7 +549,7 @@ func TestUpdateServer(t *testing.T) {
 		newStatus     *string
 		expectError   bool
 		errorMsg      string
-		checkResult   func(*testing.T, *apiv0.ServerResponse)
+		checkResult   func(*testing.T, *models.ServerResponse)
 	}{
 		{
 			name:       "successful server update",
@@ -564,7 +565,7 @@ func TestUpdateServer(t *testing.T) {
 				},
 			},
 			expectError: false,
-			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
+			checkResult: func(t *testing.T, result *models.ServerResponse) {
 				t.Helper()
 				assert.Equal(t, "Updated description", result.Server.Description)
 				assert.Len(t, result.Server.Remotes, 1)
@@ -584,7 +585,7 @@ func TestUpdateServer(t *testing.T) {
 			},
 			newStatus:   stringPtr(string(model.StatusDeprecated)),
 			expectError: false,
-			checkResult: func(t *testing.T, result *apiv0.ServerResponse) {
+			checkResult: func(t *testing.T, result *models.ServerResponse) {
 				t.Helper()
 				assert.Equal(t, "Updated with status change", result.Server.Description)
 				assert.Equal(t, model.StatusDeprecated, result.Meta.Official.Status)

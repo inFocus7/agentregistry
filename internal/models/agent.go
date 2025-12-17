@@ -38,7 +38,8 @@ type AgentRegistryExtensions struct {
 }
 
 type AgentResponseMeta struct {
-	Official *AgentRegistryExtensions `json:"io.modelcontextprotocol.registry/official,omitempty"`
+	Official       *AgentRegistryExtensions `json:"io.modelcontextprotocol.registry/official,omitempty"`
+	ApprovalStatus string                   `json:"approvalStatus,omitempty"` // PENDING, APPROVED, or DENIED
 }
 
 type AgentResponse struct {

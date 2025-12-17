@@ -1,6 +1,7 @@
 package v0_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/agentregistry-dev/agentregistry/internal/models"
 	v0 "github.com/agentregistry-dev/agentregistry/internal/registry/api/handlers/v0"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/config"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/database"
@@ -618,5 +620,219 @@ func TestServersEndpointEdgeCases(t *testing.T) {
 			assert.NotZero(t, server.Meta.Official.PublishedAt)
 			assert.Contains(t, []model.Status{model.StatusActive, model.StatusDeprecated, model.StatusDeleted}, server.Meta.Official.Status)
 		}
+	})
+}
+
+func TestServersPublishedAndApprovalStatus(t *testing.T) {
+	ctx := context.Background()
+	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig())
+
+	// Create servers with different published/approval status combinations
+	testCases := []struct {
+		name               string
+		serverName         string
+		version            string
+		shouldApprove      bool
+		shouldLeavePending bool // if true, the server will not be approved or denied, leaving it in pending state
+		shouldPublish      bool
+		expectedVisible    bool // visible in public endpoints
+	}{
+		{"pending unpublished", "com.example/pending-unpublished", "1.0.0", false, true, false, false},
+		{"pending published", "com.example/pending-published", "1.0.0", false, true, true, false},
+		{"approved unpublished", "com.example/approved-unpublished", "1.0.0", true, false, false, false},
+		{"approved published", "com.example/approved-published", "1.0.0", true, false, true, true},
+		{"denied unpublished", "com.example/denied-unpublished", "1.0.0", false, false, false, false},
+		{"denied published", "com.example/denied-published", "1.0.0", false, false, true, false},
+	}
+
+	// Create all servers
+	for _, tc := range testCases {
+		_, err := registryService.CreateServer(ctx, &apiv0.ServerJSON{
+			Schema:      model.CurrentSchemaURL,
+			Name:        tc.serverName,
+			Description: tc.name,
+			Version:     tc.version,
+		})
+		require.NoError(t, err, "Failed to create server %s", tc.serverName)
+
+		if !tc.shouldLeavePending {
+			if tc.shouldApprove {
+				err = registryService.ApproveServer(ctx, tc.serverName, tc.version, "Test approval")
+				require.NoError(t, err, "Failed to approve server %s", tc.serverName)
+			} else {
+				err = registryService.DenyServer(ctx, tc.serverName, tc.version, "Test denial")
+				require.NoError(t, err, "Failed to deny server %s", tc.serverName)
+			}
+		}
+
+		if tc.shouldPublish {
+			err = registryService.PublishServer(ctx, tc.serverName, tc.version)
+			require.NoError(t, err, "Failed to publish server %s", tc.serverName)
+		}
+	}
+
+	// Test public endpoints (should only show approved + published)
+	t.Run("public endpoints visibility", func(t *testing.T) {
+		mux := http.NewServeMux()
+		api := humago.New(mux, huma.DefaultConfig("Test API", "1.0.0"))
+		v0.RegisterServersEndpoints(api, "/v0", registryService, false)
+
+		req := httptest.NewRequest(http.MethodGet, "/v0/servers", nil)
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var resp apiv0.ServerListResponse
+		err := json.NewDecoder(w.Body).Decode(&resp)
+		assert.NoError(t, err)
+
+		// Should only see approved + published server
+		visibleNames := make(map[string]bool)
+		for _, server := range resp.Servers {
+			visibleNames[server.Server.Name] = true
+		}
+
+		for _, tc := range testCases {
+			if tc.expectedVisible {
+				assert.True(t, visibleNames[tc.serverName], "Server %s should be visible in public endpoint", tc.serverName)
+			} else {
+				assert.False(t, visibleNames[tc.serverName], "Server %s should NOT be visible in public endpoint", tc.serverName)
+			}
+		}
+	})
+
+	// Test admin endpoints (should show all servers)
+	t.Run("admin endpoints visibility", func(t *testing.T) {
+		mux := http.NewServeMux()
+		api := humago.New(mux, huma.DefaultConfig("Test API", "1.0.0"))
+		v0.RegisterServersEndpoints(api, "/v0", registryService, true)
+
+		req := httptest.NewRequest(http.MethodGet, "/v0/servers", nil)
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var resp apiv0.ServerListResponse
+		err := json.NewDecoder(w.Body).Decode(&resp)
+		assert.NoError(t, err)
+
+		// Should see all servers
+		visibleNames := make(map[string]bool)
+		for _, server := range resp.Servers {
+			visibleNames[server.Server.Name] = true
+		}
+
+		for _, tc := range testCases {
+			assert.True(t, visibleNames[tc.serverName], "Server %s should be visible in admin endpoint", tc.serverName)
+		}
+	})
+}
+
+func TestServersApprovalEndpoints(t *testing.T) {
+	ctx := context.Background()
+	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig())
+
+	serverName := "com.example/approval-server"
+	version := "1.0.0"
+
+	// Create server
+	_, err := registryService.CreateServer(ctx, &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        serverName,
+		Description: "Server for approval testing",
+		Version:     version,
+	})
+	require.NoError(t, err)
+
+	// Create API with admin endpoints
+	mux := http.NewServeMux()
+	api := humago.New(mux, huma.DefaultConfig("Test API", "1.0.0"))
+	v0.RegisterServersEndpoints(api, "/v0", registryService, true)
+	v0.RegisterAdminServersApprovalStatusEndpoints(api, "/v0", registryService)
+
+	// Verify initial status is PENDING
+	initialReq := httptest.NewRequest(http.MethodGet, "/v0/servers/"+url.PathEscape(serverName)+"/versions/"+url.PathEscape(version), nil)
+	initialW := httptest.NewRecorder()
+	mux.ServeHTTP(initialW, initialReq)
+	assert.Equal(t, http.StatusOK, initialW.Code)
+	var initialResp models.ServerListResponse
+	err = json.NewDecoder(initialW.Body).Decode(&initialResp)
+	assert.NoError(t, err)
+	require.Len(t, initialResp.Servers, 1)
+	assert.Equal(t, "PENDING", initialResp.Servers[0].Meta.ApprovalStatus, "New server should have PENDING approval status")
+
+	t.Run("approve server", func(t *testing.T) {
+		encodedName := url.PathEscape(serverName)
+		encodedVersion := url.PathEscape(version)
+
+		body := map[string]string{"reason": "Test approval reason"}
+		bodyJSON, err := json.Marshal(body)
+		require.NoError(t, err)
+		approveReq := httptest.NewRequest(http.MethodPost, "/v0/servers/"+encodedName+"/versions/"+encodedVersion+"/approve", bytes.NewReader(bodyJSON))
+		approveReq.Header.Set("Content-Type", "application/json")
+		approveW := httptest.NewRecorder()
+
+		mux.ServeHTTP(approveW, approveReq)
+
+		assert.Equal(t, http.StatusOK, approveW.Code)
+		var resp v0.EmptyResponse
+		err = json.NewDecoder(approveW.Body).Decode(&resp)
+		assert.NoError(t, err)
+		assert.Contains(t, resp.Message, "approved successfully")
+
+		// Verify approval status by checking the server via admin endpoint
+		verifyReq := httptest.NewRequest(http.MethodGet, "/v0/servers/"+encodedName+"/versions/"+encodedVersion, nil)
+		verifyW := httptest.NewRecorder()
+		mux.ServeHTTP(verifyW, verifyReq)
+
+		assert.Equal(t, http.StatusOK, verifyW.Code)
+		var verifyResp models.ServerListResponse
+		err = json.NewDecoder(verifyW.Body).Decode(&verifyResp)
+		assert.NoError(t, err)
+		require.Len(t, verifyResp.Servers, 1)
+		assert.Equal(t, "APPROVED", verifyResp.Servers[0].Meta.ApprovalStatus, "Server should have APPROVED status after approval endpoint call")
+	})
+
+	t.Run("deny server", func(t *testing.T) {
+		// Create another server for denial test
+		serverName2 := "com.example/denial-server"
+		_, err := registryService.CreateServer(ctx, &apiv0.ServerJSON{
+			Schema:      model.CurrentSchemaURL,
+			Name:        serverName2,
+			Description: "Server for denial testing",
+			Version:     version,
+		})
+		require.NoError(t, err)
+
+		encodedName := url.PathEscape(serverName2)
+		encodedVersion := url.PathEscape(version)
+
+		body := map[string]string{"reason": "Test denial reason"}
+		bodyJSON, err := json.Marshal(body)
+		require.NoError(t, err)
+		denyReq := httptest.NewRequest(http.MethodPost, "/v0/servers/"+encodedName+"/versions/"+encodedVersion+"/deny", bytes.NewReader(bodyJSON))
+		denyReq.Header.Set("Content-Type", "application/json")
+		denyW := httptest.NewRecorder()
+
+		mux.ServeHTTP(denyW, denyReq)
+
+		assert.Equal(t, http.StatusOK, denyW.Code)
+		var denyResp v0.EmptyResponse
+		err = json.NewDecoder(denyW.Body).Decode(&denyResp)
+		assert.NoError(t, err)
+		assert.Contains(t, denyResp.Message, "denied successfully")
+
+		// Verify denial status by checking the server via admin endpoint
+		encodedName2 := url.PathEscape(serverName2)
+		verifyReq := httptest.NewRequest(http.MethodGet, "/v0/servers/"+encodedName2+"/versions/"+encodedVersion, nil)
+		verifyW := httptest.NewRecorder()
+		mux.ServeHTTP(verifyW, verifyReq)
+
+		assert.Equal(t, http.StatusOK, verifyW.Code)
+		var verifyResp models.ServerListResponse
+		err = json.NewDecoder(verifyW.Body).Decode(&verifyResp)
+		assert.NoError(t, err)
+		require.Len(t, verifyResp.Servers, 1)
+		assert.Equal(t, "DENIED", verifyResp.Servers[0].Meta.ApprovalStatus, "Server should have DENIED status after deny endpoint call")
 	})
 }

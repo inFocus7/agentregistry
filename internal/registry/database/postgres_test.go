@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	models "github.com/agentregistry-dev/agentregistry/internal/models"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/database"
 	"github.com/jackc/pgx/v5"
 	apiv0 "github.com/modelcontextprotocol/registry/pkg/api/v0"
@@ -935,7 +936,7 @@ func TestPostgreSQL_PerformanceScenarios(t *testing.T) {
 		}
 
 		// Test paginated retrieval
-		allResults := []*apiv0.ServerResponse{}
+		allResults := []*models.ServerResponse{}
 		cursor := ""
 		pageSize := 10
 

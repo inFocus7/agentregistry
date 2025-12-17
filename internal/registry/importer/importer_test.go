@@ -8,6 +8,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/agentregistry-dev/agentregistry/internal/models"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/config"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/database"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/importer"
@@ -141,12 +142,12 @@ func TestImportService_RegistryPagination(t *testing.T) {
 		servers, _, _ := registryService.ListServers(ctx, nil, "", 10)
 
 		// Convert to response format
-		serverValues := make([]apiv0.ServerResponse, len(servers))
+		serverValues := make([]models.ServerResponse, len(servers))
 		for i, server := range servers {
 			serverValues[i] = *server
 		}
 
-		response := apiv0.ServerListResponse{
+		response := models.ServerListResponse{
 			Servers: serverValues,
 			Metadata: apiv0.Metadata{
 				Count: len(servers),
