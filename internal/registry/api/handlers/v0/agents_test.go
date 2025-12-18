@@ -23,7 +23,7 @@ import (
 
 func TestListAgentsEndpoint(t *testing.T) {
 	ctx := context.Background()
-	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig())
+	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig(), true)
 
 	// Setup test data
 	_, err := registryService.CreateAgent(ctx, &agentmodels.AgentJSON{
@@ -133,7 +133,7 @@ func TestListAgentsEndpoint(t *testing.T) {
 
 func TestGetLatestAgentVersionEndpoint(t *testing.T) {
 	ctx := context.Background()
-	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig())
+	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig(), true)
 
 	// Setup test data
 	_, err := registryService.CreateAgent(ctx, &agentmodels.AgentJSON{
@@ -202,7 +202,7 @@ func TestGetLatestAgentVersionEndpoint(t *testing.T) {
 
 func TestGetAgentVersionEndpoint(t *testing.T) {
 	ctx := context.Background()
-	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig())
+	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig(), true)
 
 	agentName := "com.example.version-agent"
 
@@ -349,7 +349,7 @@ func TestGetAgentVersionEndpoint(t *testing.T) {
 
 func TestGetAllAgentVersionsEndpoint(t *testing.T) {
 	ctx := context.Background()
-	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig())
+	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig(), true)
 
 	agentName := "com.example.multi-version-agent"
 
@@ -449,7 +449,7 @@ func TestGetAllAgentVersionsEndpoint(t *testing.T) {
 
 func TestAgentsEndpointEdgeCases(t *testing.T) {
 	ctx := context.Background()
-	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig())
+	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig(), true)
 
 	// Setup test data with edge case names that comply with constraints
 	specialAgents := []struct {
@@ -583,7 +583,7 @@ func TestAgentsEndpointEdgeCases(t *testing.T) {
 
 func TestDeleteAgentVersionEndpoint(t *testing.T) {
 	ctx := context.Background()
-	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig())
+	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig(), true)
 
 	agentName := "com.example.delete-agent"
 	version := "1.0.0"
@@ -638,9 +638,10 @@ func TestDeleteAgentVersionEndpoint(t *testing.T) {
 	})
 }
 
-func TestAgentsPublishedAndApprovalStatus(t *testing.T) {
+func TestAgentsPublishedAndApprovalStatus_AutoApproveDisabled(t *testing.T) {
 	ctx := context.Background()
-	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig())
+	// Auto-approval is enabled for this test
+	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig(), false)
 
 	// Create agents with different published/approval status combinations
 	testCases := []struct {
@@ -768,9 +769,140 @@ func TestAgentsPublishedAndApprovalStatus(t *testing.T) {
 	})
 }
 
-func TestAgentsApprovalEndpoints(t *testing.T) {
+func TestAgentsPublishedAndApprovalStatus_AutoApproveEnabled(t *testing.T) {
 	ctx := context.Background()
-	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig())
+	// Auto-approval is enabled for this test
+	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig(), true)
+
+	// Create agents with different published/approval status combinations
+	testCases := []struct {
+		name               string
+		agentName          string
+		version            string
+		shouldApprove      bool
+		shouldLeavePending bool // if true, the agent will not be approved or denied, technically leaving it in auto-approved state
+		shouldPublish      bool
+		expectedVisible    bool // visible in public endpoints
+	}{
+		{"pending unpublished", "test.pending-unpublished", "1.0.0", false, true, false, false},
+		{"pending published", "test.pending-published", "1.0.0", false, true, true, true}, // auto-approval is enabled
+		{"approved unpublished", "test.approved-unpublished", "1.0.0", true, false, false, false},
+		{"approved published", "test.approved-published", "1.0.0", true, false, true, true},
+		{"denied unpublished", "test.denied-unpublished", "1.0.0", false, false, false, false},
+		{"denied published", "test.denied-published", "1.0.0", false, false, true, false},
+	}
+
+	// Create all agents
+	for _, tc := range testCases {
+		_, err := registryService.CreateAgent(ctx, &agentmodels.AgentJSON{
+			AgentManifest: common.AgentManifest{
+				Name:        tc.agentName,
+				Description: tc.name,
+				Language:    "python",
+				Framework:   "adk",
+			},
+			Version: tc.version,
+		})
+		require.NoError(t, err, "Failed to create agent %s", tc.agentName)
+
+		if !tc.shouldLeavePending {
+			if tc.shouldApprove {
+				err = registryService.ApproveAgent(ctx, tc.agentName, tc.version, "Test approval reason")
+				require.NoError(t, err, "Failed to approve agent %s", tc.agentName)
+			} else {
+				err = registryService.DenyAgent(ctx, tc.agentName, tc.version, "Test denial reason")
+				require.NoError(t, err, "Failed to deny agent %s", tc.agentName)
+			}
+		}
+
+		if tc.shouldPublish {
+			err = registryService.PublishAgent(ctx, tc.agentName, tc.version)
+			require.NoError(t, err, "Failed to publish agent %s", tc.agentName)
+		}
+	}
+
+	// Test public endpoints (should only show approved published)
+	t.Run("public endpoints visibility", func(t *testing.T) {
+		mux := http.NewServeMux()
+		api := humago.New(mux, huma.DefaultConfig("Test API", "1.0.0"))
+		v0.RegisterAgentsEndpoints(api, "/v0", registryService, false)
+
+		req := httptest.NewRequest(http.MethodGet, "/v0/agents", nil)
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var resp agentmodels.AgentListResponse
+		err := json.NewDecoder(w.Body).Decode(&resp)
+		assert.NoError(t, err)
+
+		// Should only see approved + published agent
+		visibleNames := make(map[string]bool)
+		for _, agent := range resp.Agents {
+			visibleNames[agent.Agent.Name] = true
+		}
+
+		for _, tc := range testCases {
+			if tc.expectedVisible {
+				assert.True(t, visibleNames[tc.agentName], "Agent %s should be visible in public endpoint", tc.agentName)
+			} else {
+				assert.False(t, visibleNames[tc.agentName], "Agent %s should NOT be visible in public endpoint", tc.agentName)
+			}
+		}
+	})
+
+	// Test admin endpoints (should show all agents)
+	t.Run("admin endpoints visibility", func(t *testing.T) {
+		mux := http.NewServeMux()
+		api := humago.New(mux, huma.DefaultConfig("Test API", "1.0.0"))
+		v0.RegisterAgentsEndpoints(api, "/v0", registryService, true)
+
+		req := httptest.NewRequest(http.MethodGet, "/v0/agents", nil)
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var resp agentmodels.AgentListResponse
+		err := json.NewDecoder(w.Body).Decode(&resp)
+		assert.NoError(t, err)
+
+		// Should see all agents
+		visibleNames := make(map[string]bool)
+		agentMap := make(map[string]*agentmodels.AgentResponse)
+		for i := range resp.Agents {
+			agent := &resp.Agents[i]
+			visibleNames[agent.Agent.Name] = true
+			agentMap[agent.Agent.Name] = agent
+		}
+
+		for _, tc := range testCases {
+			assert.True(t, visibleNames[tc.agentName], "Agent %s should be visible in admin endpoint", tc.agentName)
+
+			// Verify approval status from API response
+			agent := agentMap[tc.agentName]
+			require.NotNil(t, agent, "Agent %s should exist in response", tc.agentName)
+			require.NotNil(t, agent.Meta.Official, "Agent %s should have official metadata", tc.agentName)
+
+			if tc.shouldLeavePending {
+				assert.Equal(t, "APPROVED", agent.Meta.ApprovalStatus.Status, "Agent %s should have APPROVED approval status", tc.agentName)
+				assert.Equal(t, "Auto-approved: auto-approval is enabled", *agent.Meta.ApprovalStatus.Reason, "Agent %s should have the auto-approval reason", tc.agentName)
+			} else if tc.shouldApprove {
+				assert.Equal(t, "APPROVED", agent.Meta.ApprovalStatus.Status, "Agent %s should have APPROVED status", tc.agentName)
+				assert.Equal(t, "Test approval reason", *agent.Meta.ApprovalStatus.Reason, "Agent %s should have the approval reason", tc.agentName)
+			} else {
+				assert.Equal(t, "DENIED", agent.Meta.ApprovalStatus.Status, "Agent %s should have DENIED status", tc.agentName)
+				assert.Equal(t, "Test denial reason", *agent.Meta.ApprovalStatus.Reason, "Agent %s should have the denial reason", tc.agentName)
+			}
+
+			// Verify published status
+			assert.Equal(t, tc.shouldPublish, agent.Meta.Official.Published, "Agent %s published status should match", tc.agentName)
+		}
+	})
+}
+
+func TestAgentsApprovalEndpoints_AutoApproveDisabled(t *testing.T) {
+	ctx := context.Background()
+	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig(), false)
 
 	agentName := "test.approval-agent"
 	version := "1.0.0"
@@ -793,7 +925,7 @@ func TestAgentsApprovalEndpoints(t *testing.T) {
 	v0.RegisterAgentsEndpoints(api, "/v0", registryService, true)
 	v0.RegisterAdminAgentsApprovalStatusEndpoints(api, "/v0", registryService)
 
-	// Verify initial status is PENDING
+	// Verify initial status is APPROVED
 	initialReq := httptest.NewRequest(http.MethodGet, "/v0/agents/"+url.PathEscape(agentName)+"/versions/"+url.PathEscape(version), nil)
 	initialW := httptest.NewRecorder()
 	mux.ServeHTTP(initialW, initialReq)
@@ -803,6 +935,120 @@ func TestAgentsApprovalEndpoints(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "PENDING", initialResp.Meta.ApprovalStatus.Status, "New agent should have PENDING approval status")
 	assert.Nil(t, initialResp.Meta.ApprovalStatus.Reason, "New agent should have no approval reason")
+
+	t.Run("approve agent", func(t *testing.T) {
+		encodedName := url.PathEscape(agentName)
+		encodedVersion := url.PathEscape(version)
+
+		body := map[string]string{"reason": "Test approval reason"}
+		bodyJSON, err := json.Marshal(body)
+		require.NoError(t, err)
+		approveReq := httptest.NewRequest(http.MethodPost, "/v0/agents/"+encodedName+"/versions/"+encodedVersion+"/approve", bytes.NewReader(bodyJSON))
+		approveReq.Header.Set("Content-Type", "application/json")
+		approveW := httptest.NewRecorder()
+
+		mux.ServeHTTP(approveW, approveReq)
+
+		assert.Equal(t, http.StatusOK, approveW.Code)
+		var approveResp v0.EmptyResponse
+		err = json.NewDecoder(approveW.Body).Decode(&approveResp)
+		assert.NoError(t, err)
+		assert.Contains(t, approveResp.Message, "approved successfully")
+
+		// Verify approval status by checking the agent via admin endpoint
+		verifyReq := httptest.NewRequest(http.MethodGet, "/v0/agents/"+encodedName+"/versions/"+encodedVersion, nil)
+		verifyW := httptest.NewRecorder()
+		mux.ServeHTTP(verifyW, verifyReq)
+
+		assert.Equal(t, http.StatusOK, verifyW.Code)
+		var verifyResp agentmodels.AgentResponse
+		err = json.NewDecoder(verifyW.Body).Decode(&verifyResp)
+		assert.NoError(t, err)
+		assert.Equal(t, "APPROVED", verifyResp.Meta.ApprovalStatus.Status, "Agent should have APPROVED status after approval endpoint call")
+		assert.Equal(t, "Test approval reason", *verifyResp.Meta.ApprovalStatus.Reason, "Agent should have the approval reason after approval endpoint call")
+	})
+
+	t.Run("deny agent", func(t *testing.T) {
+		// Create another agent for denial test
+		agentName2 := "test.denial-agent"
+		_, err := registryService.CreateAgent(ctx, &agentmodels.AgentJSON{
+			AgentManifest: common.AgentManifest{
+				Name:        agentName2,
+				Description: "Agent for denial testing",
+				Language:    "python",
+				Framework:   "adk",
+			},
+			Version: version,
+		})
+		require.NoError(t, err)
+
+		encodedName := url.PathEscape(agentName2)
+		encodedVersion := url.PathEscape(version)
+
+		body := map[string]string{"reason": "Test denial reason"}
+		bodyJSON, err := json.Marshal(body)
+		require.NoError(t, err)
+		denyReq := httptest.NewRequest(http.MethodPost, "/v0/agents/"+encodedName+"/versions/"+encodedVersion+"/deny", bytes.NewReader(bodyJSON))
+		denyReq.Header.Set("Content-Type", "application/json")
+		denyW := httptest.NewRecorder()
+
+		mux.ServeHTTP(denyW, denyReq)
+
+		assert.Equal(t, http.StatusOK, denyW.Code)
+		var denyResp v0.EmptyResponse
+		err = json.NewDecoder(denyW.Body).Decode(&denyResp)
+		assert.NoError(t, err)
+		assert.Contains(t, denyResp.Message, "denied successfully")
+
+		// Verify approval status by checking the agent via admin endpoint
+		verifyReq := httptest.NewRequest(http.MethodGet, "/v0/agents/"+encodedName+"/versions/"+encodedVersion, nil)
+		verifyW := httptest.NewRecorder()
+		mux.ServeHTTP(verifyW, verifyReq)
+
+		assert.Equal(t, http.StatusOK, verifyW.Code)
+		var verifyResp agentmodels.AgentResponse
+		err = json.NewDecoder(verifyW.Body).Decode(&verifyResp)
+		assert.NoError(t, err)
+		assert.Equal(t, "DENIED", verifyResp.Meta.ApprovalStatus.Status, "Agent should have DENIED status after deny endpoint call")
+		assert.Equal(t, "Test denial reason", *verifyResp.Meta.ApprovalStatus.Reason, "Agent should have the denial reason after deny endpoint call")
+	})
+}
+
+func TestAgentsApprovalEndpoints_AutoApproveEnabled(t *testing.T) {
+	ctx := context.Background()
+	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig(), true)
+
+	agentName := "test.approval-agent"
+	version := "1.0.0"
+
+	// Create agent
+	_, err := registryService.CreateAgent(ctx, &agentmodels.AgentJSON{
+		AgentManifest: common.AgentManifest{
+			Name:        agentName,
+			Description: "Agent for approval testing",
+			Language:    "python",
+			Framework:   "adk",
+		},
+		Version: version,
+	})
+	require.NoError(t, err)
+
+	// Create API with admin endpoints
+	mux := http.NewServeMux()
+	api := humago.New(mux, huma.DefaultConfig("Test API", "1.0.0"))
+	v0.RegisterAgentsEndpoints(api, "/v0", registryService, true)
+	v0.RegisterAdminAgentsApprovalStatusEndpoints(api, "/v0", registryService)
+
+	// Verify initial status is APPROVED
+	initialReq := httptest.NewRequest(http.MethodGet, "/v0/agents/"+url.PathEscape(agentName)+"/versions/"+url.PathEscape(version), nil)
+	initialW := httptest.NewRecorder()
+	mux.ServeHTTP(initialW, initialReq)
+	assert.Equal(t, http.StatusOK, initialW.Code)
+	var initialResp agentmodels.AgentResponse
+	err = json.NewDecoder(initialW.Body).Decode(&initialResp)
+	assert.NoError(t, err)
+	assert.Equal(t, "APPROVED", initialResp.Meta.ApprovalStatus.Status, "New agent should have APPROVED approval status")
+	assert.Equal(t, "Auto-approved: auto-approval is enabled", *initialResp.Meta.ApprovalStatus.Reason, "New agent should have the auto-approval reason")
 
 	t.Run("approve agent", func(t *testing.T) {
 		encodedName := url.PathEscape(agentName)

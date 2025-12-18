@@ -31,18 +31,21 @@ const maxServerVersionsPerServer = 10000
 // registryServiceImpl implements the RegistryService interface using our Database
 // It also implements the Reconciler interface for server-side container management
 type registryServiceImpl struct {
-	db  database.Database
-	cfg *config.Config
+	db                   database.Database
+	cfg                  *config.Config
+	autoApproveArtifacts bool
 }
 
 // NewRegistryService creates a new registry service with the provided database and configuration
 func NewRegistryService(
 	db database.Database,
 	cfg *config.Config,
+	autoApproveArtifacts bool,
 ) RegistryService {
 	return &registryServiceImpl{
-		db:  db,
-		cfg: cfg,
+		db:                   db,
+		cfg:                  cfg,
+		autoApproveArtifacts: autoApproveArtifacts,
 	}
 }
 
@@ -175,7 +178,24 @@ func (s *registryServiceImpl) createServerInTransaction(ctx context.Context, tx 
 	}
 
 	// Insert new server version
-	return s.db.CreateServer(ctx, tx, &serverJSON, officialMeta)
+	serverResponse, err := s.db.CreateServer(ctx, tx, &serverJSON, officialMeta)
+	if err != nil {
+		return nil, err
+	}
+
+	// Auto-approve a created artifact if configured
+	if s.autoApproveArtifacts {
+		if err := s.db.ApproveServer(ctx, tx, serverJSON.Name, serverJSON.Version, "Auto-approved: auto-approval is enabled"); err != nil {
+			return nil, fmt.Errorf("failed to auto-approve server: %w", err)
+		}
+		// Update the response to reflect approved status
+		serverResponse.Meta.ApprovalStatus.Status = "APPROVED"
+		serverResponse.Meta.ApprovalStatus.UpdatedAt = time.Now()
+		approvedReason := "Auto-approved: auto-approval is enabled"
+		serverResponse.Meta.ApprovalStatus.Reason = &approvedReason
+	}
+
+	return serverResponse, nil
 }
 
 // validateNoDuplicateRemoteURLs checks that no other server is using the same remote URLs
@@ -316,7 +336,25 @@ func (s *registryServiceImpl) createSkillInTransaction(ctx context.Context, tx p
 		IsLatest:    isNewLatest,
 	}
 
-	return s.db.CreateSkill(ctx, tx, &skillJSON, officialMeta)
+	// Insert new skill version
+	skillResponse, err := s.db.CreateSkill(ctx, tx, &skillJSON, officialMeta)
+	if err != nil {
+		return nil, err
+	}
+
+	// Auto-approve a created artifact if configured
+	if s.autoApproveArtifacts {
+		if err := s.db.ApproveSkill(ctx, tx, skillJSON.Name, skillJSON.Version, "Auto-approved: auto-approval is enabled"); err != nil {
+			return nil, fmt.Errorf("failed to auto-approve skill: %w", err)
+		}
+		// Update the response to reflect approved status
+		skillResponse.Meta.ApprovalStatus.Status = "APPROVED"
+		skillResponse.Meta.ApprovalStatus.UpdatedAt = time.Now()
+		approvedReason := "Auto-approved: auto-approval is enabled"
+		skillResponse.Meta.ApprovalStatus.Reason = &approvedReason
+	}
+
+	return skillResponse, nil
 }
 
 // PublishSkill marks a skill as published
@@ -627,7 +665,25 @@ func (s *registryServiceImpl) createAgentInTransaction(ctx context.Context, tx p
 		IsLatest:    isNewLatest,
 	}
 
-	return s.db.CreateAgent(ctx, tx, &agentJSON, officialMeta)
+	// Insert new agent version
+	agentResponse, err := s.db.CreateAgent(ctx, tx, &agentJSON, officialMeta)
+	if err != nil {
+		return nil, err
+	}
+
+	// Auto-approve a created artifact if configured
+	if s.autoApproveArtifacts {
+		if err := s.db.ApproveAgent(ctx, tx, agentJSON.Name, agentJSON.Version, "Auto-approved: auto-approval is enabled"); err != nil {
+			return nil, fmt.Errorf("failed to auto-approve agent: %w", err)
+		}
+		// Update the response to reflect approved status
+		agentResponse.Meta.ApprovalStatus.Status = "APPROVED"
+		agentResponse.Meta.ApprovalStatus.UpdatedAt = time.Now()
+		approvedReason := "Auto-approved: auto-approval is enabled"
+		agentResponse.Meta.ApprovalStatus.Reason = &approvedReason
+	}
+
+	return agentResponse, nil
 }
 
 // PublishAgent marks an agent as published
