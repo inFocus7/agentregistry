@@ -10,8 +10,8 @@ import (
 	"github.com/agentregistry-dev/agentregistry/internal/cli/mcp"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/skill"
 	"github.com/agentregistry-dev/agentregistry/internal/client"
-	"github.com/agentregistry-dev/agentregistry/internal/daemon"
 	"github.com/agentregistry-dev/agentregistry/internal/utils"
+	"github.com/agentregistry-dev/agentregistry/pkg/daemon"
 	"github.com/agentregistry-dev/agentregistry/pkg/types"
 	"github.com/spf13/cobra"
 )

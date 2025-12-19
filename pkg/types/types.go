@@ -75,3 +75,12 @@ type DaemonManager interface {
 // The factory receives a Server interface and should return a Server after
 // registering new routes using base.HumaAPI() or base.Mux().
 type HTTPServerFactory func(base Server) Server
+
+// DaemonConfig allows customization of the default daemon manager
+type DaemonConfig struct {
+	ProjectName    string // docker compose project name (default: "agentregistry")
+	ContainerName  string // container name to check for running state (default: "agentregistry-server")
+	ComposeYAML    string // docker-compose.yml content (default: embedded)
+	DockerRegistry string // image registry (default: version.DockerRegistry)
+	Version        string // image version (default: version.Version)
+}
