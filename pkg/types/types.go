@@ -4,8 +4,11 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/agentregistry-dev/agentregistry/internal/models"
+	internalv0 "github.com/agentregistry-dev/agentregistry/internal/registry/api/handlers/v0"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/service"
 	"github.com/danielgtaylor/huma/v2"
+	v0 "github.com/modelcontextprotocol/registry/pkg/api/v0"
 )
 
 // ServiceFactory is a function type that creates a service implementation.
@@ -58,6 +61,17 @@ type Server interface {
 
 	// Shutdown gracefully shuts down the server
 	Shutdown(ctx context.Context) error
+}
+
+// DaemonManager defines the interface for managing the CLI's backend daemon.
+// External libraries can implement this to use their own orchestration.
+type DaemonManager interface {
+	// IsDockerComposeAvailable checks if docker compose is available on the system
+	IsDockerComposeAvailable() bool
+	// IsRunning checks if the daemon is currently running
+	IsRunning() bool
+	// Start starts the daemon, blocking until it's ready
+	Start() error
 }
 
 // HTTPServerFactory is a function type that creates a server implementation that
