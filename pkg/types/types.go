@@ -4,11 +4,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/agentregistry-dev/agentregistry/internal/models"
-	internalv0 "github.com/agentregistry-dev/agentregistry/internal/registry/api/handlers/v0"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/service"
 	"github.com/danielgtaylor/huma/v2"
-	v0 "github.com/modelcontextprotocol/registry/pkg/api/v0"
 )
 
 // ServiceFactory is a function type that creates a service implementation.
