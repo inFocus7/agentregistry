@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentregistry-dev/agentregistry/internal/cli/agent/frameworks/common"
 	models "github.com/agentregistry-dev/agentregistry/internal/models"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/config"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/database"
@@ -271,7 +272,7 @@ func TestGetServerByNameAndVersion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := service.GetServerByNameAndVersion(ctx, tt.serverName, tt.version, false)
+			result, err := service.GetServerByNameAndVersion(ctx, tt.serverName, tt.version, false, false)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -446,7 +447,7 @@ func TestGetAllVersionsByServerName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := service.GetAllVersionsByServerName(ctx, tt.serverName, false)
+			result, err := service.GetAllVersionsByServerName(ctx, tt.serverName, false, false)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -505,7 +506,7 @@ func TestCreateServerConcurrentVersionsNoRace(t *testing.T) {
 	}
 
 	// Query database to check the final state after all creates complete
-	allVersions, err := service.GetAllVersionsByServerName(ctx, serverName, false)
+	allVersions, err := service.GetAllVersionsByServerName(ctx, serverName, false, false)
 	require.NoError(t, err, "failed to get all versions")
 
 	latestCount := 0
@@ -665,7 +666,7 @@ func TestUpdateServer_SkipValidationForDeletedServers(t *testing.T) {
 	require.NoError(t, err, "should be able to set server to deleted (validation should be skipped)")
 
 	// Verify server is now deleted
-	updatedServer, err := service.GetServerByNameAndVersion(ctx, serverName, version, false)
+	updatedServer, err := service.GetServerByNameAndVersion(ctx, serverName, version, false, false)
 	require.NoError(t, err)
 	assert.Equal(t, model.StatusDeleted, updatedServer.Meta.Official.Status)
 
@@ -854,7 +855,7 @@ func TestVersionComparison(t *testing.T) {
 	assert.True(t, latest.Meta.Official.IsLatest)
 
 	// Verify only one version is marked as latest
-	allVersions, err := service.GetAllVersionsByServerName(ctx, serverName, false)
+	allVersions, err := service.GetAllVersionsByServerName(ctx, serverName, false, false)
 	require.NoError(t, err)
 
 	latestCount := 0
@@ -864,6 +865,128 @@ func TestVersionComparison(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 1, latestCount, "Exactly one version should be marked as latest")
+}
+
+func TestApprovalEnforcement(t *testing.T) {
+	ctx := context.Background()
+	testDB := database.NewTestDB(t)
+	// Create service WITHOUT auto-approval for testing enforcement
+	svc := NewRegistryService(testDB, &config.Config{
+		EnableRegistryValidation: false,
+		AgentGatewayPort:         21212,
+	}, false)
+
+	t.Run("DeployServer requires approval", func(t *testing.T) {
+		serverName := "com.example/test-server"
+		version := "1.0.0"
+
+		// Create server
+		_, err := svc.CreateServer(ctx, &apiv0.ServerJSON{
+			Schema:  model.CurrentSchemaURL,
+			Name:    serverName,
+			Version: version,
+			Remotes: []model.Transport{
+				{Type: "streamable-http", URL: "https://api.example.com/mcp"},
+			},
+		})
+		require.NoError(t, err)
+
+		// Try to deploy - should fail with NotFound BEFORE reconciliation
+		_, err = svc.DeployServer(ctx, serverName, version, nil, false)
+		assert.ErrorIs(t, err, database.ErrNotFound)
+
+		// Publish server
+		err = svc.PublishServer(ctx, serverName, version)
+		require.NoError(t, err)
+
+		// Approve server
+		err = svc.ApproveServer(ctx, serverName, version, "approved for deployment")
+		require.NoError(t, err)
+
+		// Try to deploy - should succeed deploying (error will occur due to ReconcileAll)
+		_, err = svc.DeployServer(ctx, serverName, version, nil, false)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "deployment created but reconciliation failed")
+	})
+
+	t.Run("DeployAgent requires approval", func(t *testing.T) {
+		agentName := "com.example.test-agent"
+		version := "1.0.0"
+
+		// Create agent
+		_, err := svc.CreateAgent(ctx, &models.AgentJSON{
+			AgentManifest: common.AgentManifest{
+				Name:  agentName,
+				Image: "example-image",
+			},
+			Title:   "Test Agent",
+			Version: version,
+			Remotes: []model.Transport{
+				{Type: "streamable-http", URL: "https://api.example.com/agent"},
+			},
+		})
+		require.NoError(t, err)
+
+		// Try to deploy - should fail with NotFound BEFORE reconciliation
+		_, err = svc.DeployAgent(ctx, agentName, version, nil, false)
+		assert.ErrorIs(t, err, database.ErrNotFound)
+
+		// Publish agent
+		err = svc.PublishAgent(ctx, agentName, version)
+		require.NoError(t, err)
+
+		// Approve agent
+		err = svc.ApproveAgent(ctx, agentName, version, "approved for deployment")
+		require.NoError(t, err)
+
+		// Try to deploy - should succeed deploying (error will occur due to ReconcileAll)
+		_, err = svc.DeployAgent(ctx, agentName, version, nil, false)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "deployment created but reconciliation failed")
+	})
+
+	t.Run("Cannot change approval status while deployed", func(t *testing.T) {
+		serverName := "com.example/deploy-lock-test"
+		version := "1.0.0"
+
+		// Create and approve server
+		_, err := svc.CreateServer(ctx, &apiv0.ServerJSON{
+			Schema:  model.CurrentSchemaURL,
+			Name:    serverName,
+			Version: version,
+			Remotes: []model.Transport{
+				{Type: "streamable-http", URL: "https://api.example.com/lock-test"},
+			},
+		})
+		require.NoError(t, err)
+		err = svc.ApproveServer(ctx, serverName, version, "initial approval")
+		require.NoError(t, err)
+
+		// Directly insert a deployment record into the DB to avoid ReconcileAll
+		err = testDB.CreateDeployment(ctx, nil, &models.Deployment{
+			ServerName:   serverName,
+			Version:      version,
+			Status:       "active",
+			ResourceType: "mcp",
+		})
+		require.NoError(t, err)
+
+		// Try to Deny - should fail because it's "deployed" in the DB
+		err = svc.DenyServer(ctx, serverName, version, "denying deployed server")
+		assert.ErrorIs(t, err, database.ErrCannotChangeApprovalWhileDeployed)
+
+		// Try to Approve again - should fail
+		err = svc.ApproveServer(ctx, serverName, version, "re-approving deployed server")
+		assert.ErrorIs(t, err, database.ErrCannotChangeApprovalWhileDeployed)
+
+		// Remove deployment record from DB
+		err = testDB.RemoveDeployment(ctx, nil, serverName, version)
+		require.NoError(t, err)
+
+		// Now should be able to deny
+		err = svc.DenyServer(ctx, serverName, version, "denying after removal")
+		assert.NoError(t, err)
+	})
 }
 
 // Helper functions

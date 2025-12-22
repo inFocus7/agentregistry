@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -1054,5 +1055,85 @@ func TestServersApprovalEndpoints_AutoApproveEnabled(t *testing.T) {
 		require.Len(t, verifyResp.Servers, 1)
 		assert.Equal(t, "DENIED", verifyResp.Servers[0].Meta.ApprovalStatus.Status, "Server should have DENIED status after deny endpoint call")
 		assert.Equal(t, "Test denial reason", *verifyResp.Servers[0].Meta.ApprovalStatus.Reason, "Server should have the denial reason after deny endpoint call")
+	})
+}
+
+func TestServersDeploymentRequiresApproval(t *testing.T) {
+	ctx := context.Background()
+	testDB := database.NewTestDB(t)
+	registryService := service.NewRegistryService(testDB, &config.Config{
+		AgentGatewayPort: 21212,
+	}, false) // Auto-approval is disabled for testing
+
+	// Create API
+	mux := http.NewServeMux()
+	api := humago.New(mux, huma.DefaultConfig("Test API", "1.0.0"))
+	v0.RegisterAdminServersApprovalStatusEndpoints(api, "/v0", registryService)
+	v0.RegisterServersEndpoints(api, "/v0", registryService, true)
+	v0.RegisterDeploymentsEndpoints(api, "/v0", registryService)
+
+	serverName := "com.example/api-test-server"
+	version := "1.0.0"
+
+	// Create server
+	_, err := registryService.CreateServer(ctx, &apiv0.ServerJSON{
+		Schema:  model.CurrentSchemaURL,
+		Name:    serverName,
+		Version: version,
+		Remotes: []model.Transport{
+			{Type: "streamable-http", URL: "https://api.example.com/api-test"},
+		},
+	})
+	require.NoError(t, err)
+
+	t.Run("Deploy requires approval - returns 403 or similar through service error", func(t *testing.T) {
+		// Publish first
+		err = registryService.PublishServer(ctx, serverName, version)
+		require.NoError(t, err)
+
+		payload := map[string]interface{}{
+			"serverName":   serverName,
+			"version":      version,
+			"resourceType": "mcp",
+		}
+		body, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/v0/deployments", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+
+		// NotFound since we filter the agents by published and approved
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("Cannot change approval while deployed", func(t *testing.T) {
+		approvePayload := map[string]interface{}{
+			"reason": "approved for deployment test",
+		}
+		approveBody, _ := json.Marshal(approvePayload)
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/v0/servers/%s/versions/%s/approve", url.PathEscape(serverName), version), bytes.NewReader(approveBody))
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		// Mock deployment record directly in DB to avoid ReconcileAll
+		err = testDB.CreateDeployment(ctx, nil, &models.Deployment{
+			ServerName:   serverName,
+			Version:      version,
+			Status:       "active",
+			ResourceType: "mcp",
+		})
+		require.NoError(t, err)
+
+		// Try to deny
+		denyPayload := map[string]interface{}{
+			"reason": "trying to deny deployed server",
+		}
+		denyBody, _ := json.Marshal(denyPayload)
+		req = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/v0/servers/%s/versions/%s/deny", url.PathEscape(serverName), version), bytes.NewReader(denyBody))
+		w = httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusConflict, w.Code)
+		assert.Contains(t, w.Body.String(), "Cannot change approval status while artifact is deployed")
 	})
 }

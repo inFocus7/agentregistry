@@ -12,12 +12,13 @@ import (
 
 // Common database errors
 var (
-	ErrNotFound          = errors.New("record not found")
-	ErrAlreadyExists     = errors.New("record already exists")
-	ErrInvalidInput      = errors.New("invalid input")
-	ErrDatabase          = errors.New("database error")
-	ErrInvalidVersion    = errors.New("invalid version: cannot publish duplicate version")
-	ErrMaxServersReached = errors.New("maximum number of versions for this server reached (10000): please reach out at https://github.com/modelcontextprotocol/registry to explain your use case")
+	ErrNotFound                          = errors.New("record not found")
+	ErrAlreadyExists                     = errors.New("record already exists")
+	ErrInvalidInput                      = errors.New("invalid input")
+	ErrDatabase                          = errors.New("database error")
+	ErrInvalidVersion                    = errors.New("invalid version: cannot publish duplicate version")
+	ErrMaxServersReached                 = errors.New("maximum number of versions for this server reached (10000): please reach out at https://github.com/modelcontextprotocol/registry to explain your use case")
+	ErrCannotChangeApprovalWhileDeployed = errors.New("cannot change approval status while artifact is deployed")
 )
 
 // ServerFilter defines filtering options for server queries
@@ -82,9 +83,9 @@ type Database interface {
 	// GetServerByName retrieve a single server by its name
 	GetServerByName(ctx context.Context, tx pgx.Tx, serverName string) (*models.ServerResponse, error)
 	// GetServerByNameAndVersion retrieve specific version of a server by server name and version
-	GetServerByNameAndVersion(ctx context.Context, tx pgx.Tx, serverName string, version string, publishedOnly bool) (*models.ServerResponse, error)
+	GetServerByNameAndVersion(ctx context.Context, tx pgx.Tx, serverName string, version string, publishedOnly bool, approvedOnly bool) (*models.ServerResponse, error)
 	// GetAllVersionsByServerName retrieve all versions of a server by server name
-	GetAllVersionsByServerName(ctx context.Context, tx pgx.Tx, serverName string, publishedOnly bool) ([]*models.ServerResponse, error)
+	GetAllVersionsByServerName(ctx context.Context, tx pgx.Tx, serverName string, publishedOnly bool, approvedOnly bool) ([]*models.ServerResponse, error)
 	// GetCurrentLatestVersion retrieve the current latest version of a server by server name
 	GetCurrentLatestVersion(ctx context.Context, tx pgx.Tx, serverName string) (*models.ServerResponse, error)
 	// CountServerVersions count the number of versions for a server
@@ -102,6 +103,8 @@ type Database interface {
 	UnpublishServer(ctx context.Context, tx pgx.Tx, serverName, version string) error
 	// IsServerPublished checks if a server is published
 	IsServerPublished(ctx context.Context, tx pgx.Tx, serverName, version string) (bool, error)
+	// IsServerApproved checks if a server is approved
+	IsServerApproved(ctx context.Context, tx pgx.Tx, serverName, version string) (bool, error)
 	// ApproveServer marks a server as approved
 	ApproveServer(ctx context.Context, tx pgx.Tx, serverName, version string, reason string) error
 	// DenyServer marks a server as denied
@@ -131,9 +134,9 @@ type Database interface {
 	// GetAgentByName retrieve a single agent by its name (latest)
 	GetAgentByName(ctx context.Context, tx pgx.Tx, agentName string) (*models.AgentResponse, error)
 	// GetAgentByNameAndVersion retrieve specific version of an agent by name and version
-	GetAgentByNameAndVersion(ctx context.Context, tx pgx.Tx, agentName string, version string) (*models.AgentResponse, error)
+	GetAgentByNameAndVersion(ctx context.Context, tx pgx.Tx, agentName string, version string, publishedOnly bool, approvedOnly bool) (*models.AgentResponse, error)
 	// GetAllVersionsByAgentName retrieve all versions of an agent
-	GetAllVersionsByAgentName(ctx context.Context, tx pgx.Tx, agentName string) ([]*models.AgentResponse, error)
+	GetAllVersionsByAgentName(ctx context.Context, tx pgx.Tx, agentName string, publishedOnly bool, approvedOnly bool) ([]*models.AgentResponse, error)
 	// GetCurrentLatestAgentVersion retrieve current latest version of an agent
 	GetCurrentLatestAgentVersion(ctx context.Context, tx pgx.Tx, agentName string) (*models.AgentResponse, error)
 	// CountAgentVersions count the number of versions for an agent
@@ -148,6 +151,8 @@ type Database interface {
 	UnpublishAgent(ctx context.Context, tx pgx.Tx, agentName, version string) error
 	// IsAgentPublished checks if an agent is published
 	IsAgentPublished(ctx context.Context, tx pgx.Tx, agentName, version string) (bool, error)
+	// IsAgentApproved checks if an agent is approved
+	IsAgentApproved(ctx context.Context, tx pgx.Tx, agentName, version string) (bool, error)
 	// ApproveAgent marks an agent as approved
 	ApproveAgent(ctx context.Context, tx pgx.Tx, agentName, version string, reason string) error
 	// DenyAgent marks an agent as denied
@@ -186,6 +191,8 @@ type Database interface {
 	UnpublishSkill(ctx context.Context, tx pgx.Tx, skillName, version string) error
 	// IsSkillPublished checks if a skill is published
 	IsSkillPublished(ctx context.Context, tx pgx.Tx, skillName, version string) (bool, error)
+	// IsSkillApproved checks if a skill is approved
+	IsSkillApproved(ctx context.Context, tx pgx.Tx, skillName, version string) (bool, error)
 	// ApproveSkill marks a skill as approved
 	ApproveSkill(ctx context.Context, tx pgx.Tx, skillName, version string, reason string) error
 	// DenySkill marks a skill as denied

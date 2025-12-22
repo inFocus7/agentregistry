@@ -301,7 +301,7 @@ func (db *PostgreSQL) GetServerByName(ctx context.Context, tx pgx.Tx, serverName
 }
 
 // GetServerByNameAndVersion retrieves a specific version of a server by server name and version
-func (db *PostgreSQL) GetServerByNameAndVersion(ctx context.Context, tx pgx.Tx, serverName string, version string, publishedOnly bool) (*models.ServerResponse, error) {
+func (db *PostgreSQL) GetServerByNameAndVersion(ctx context.Context, tx pgx.Tx, serverName string, version string, publishedOnly bool, approvedOnly bool) (*models.ServerResponse, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -313,7 +313,11 @@ func (db *PostgreSQL) GetServerByNameAndVersion(ctx context.Context, tx pgx.Tx, 
 	`
 
 	if publishedOnly {
-		query += ` AND published = true AND approval_status = 'APPROVED'`
+		query += ` AND published = true`
+	}
+
+	if approvedOnly {
+		query += ` AND approval_status = 'APPROVED'`
 	}
 
 	query += `
@@ -364,8 +368,7 @@ func (db *PostgreSQL) GetServerByNameAndVersion(ctx context.Context, tx pgx.Tx, 
 }
 
 // GetAllVersionsByServerName retrieves all versions of a server by server name
-// If publishedOnly is true, only returns versions where published = true and approval_status = 'APPROVED'
-func (db *PostgreSQL) GetAllVersionsByServerName(ctx context.Context, tx pgx.Tx, serverName string, publishedOnly bool) ([]*models.ServerResponse, error) {
+func (db *PostgreSQL) GetAllVersionsByServerName(ctx context.Context, tx pgx.Tx, serverName string, publishedOnly bool, approvedOnly bool) ([]*models.ServerResponse, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -376,7 +379,11 @@ func (db *PostgreSQL) GetAllVersionsByServerName(ctx context.Context, tx pgx.Tx,
 		WHERE server_name = $1`
 
 	if publishedOnly {
-		query += ` AND published = true AND approval_status = 'APPROVED'`
+		query += ` AND published = true`
+	}
+
+	if approvedOnly {
+		query += ` AND approval_status = 'APPROVED'`
 	}
 
 	query += `
@@ -946,6 +953,27 @@ func (db *PostgreSQL) IsServerPublished(ctx context.Context, tx pgx.Tx, serverNa
 	return published, nil
 }
 
+// IsServerApproved checks if a server is approved
+func (db *PostgreSQL) IsServerApproved(ctx context.Context, tx pgx.Tx, serverName, version string) (bool, error) {
+	if ctx.Err() != nil {
+		return false, ctx.Err()
+	}
+
+	executor := db.getExecutor(tx)
+	query := `SELECT approval_status FROM servers WHERE server_name = $1 AND version = $2`
+
+	var status string
+	err := executor.QueryRow(ctx, query, serverName, version).Scan(&status)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, ErrNotFound
+		}
+		return false, fmt.Errorf("failed to check if server is approved: %w", err)
+	}
+
+	return status == "APPROVED", nil
+}
+
 func (db *PostgreSQL) UpsertServerReadme(ctx context.Context, tx pgx.Tx, readme *ServerReadme) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -1240,7 +1268,7 @@ func (db *PostgreSQL) GetAgentByName(ctx context.Context, tx pgx.Tx, agentName s
 	}, nil
 }
 
-func (db *PostgreSQL) GetAgentByNameAndVersion(ctx context.Context, tx pgx.Tx, agentName, version string) (*models.AgentResponse, error) {
+func (db *PostgreSQL) GetAgentByNameAndVersion(ctx context.Context, tx pgx.Tx, agentName, version string, publishedOnly bool, approvedOnly bool) (*models.AgentResponse, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -1248,8 +1276,21 @@ func (db *PostgreSQL) GetAgentByNameAndVersion(ctx context.Context, tx pgx.Tx, a
 		SELECT agent_name, version, status, published_at, updated_at, is_latest, approval_status, approval_reason, approval_date, value
 		FROM agents
 		WHERE agent_name = $1 AND version = $2
+	`
+
+	if publishedOnly {
+		query += ` AND published = true`
+	}
+
+	if approvedOnly {
+		query += ` AND approval_status = 'APPROVED'`
+	}
+
+	query += `
+		ORDER BY published_at DESC
 		LIMIT 1
 	`
+
 	var name, vers, status, approvalStatus string
 	var approvalReason *string
 	var publishedAt, updatedAt time.Time
@@ -1284,7 +1325,7 @@ func (db *PostgreSQL) GetAgentByNameAndVersion(ctx context.Context, tx pgx.Tx, a
 	}, nil
 }
 
-func (db *PostgreSQL) GetAllVersionsByAgentName(ctx context.Context, tx pgx.Tx, agentName string) ([]*models.AgentResponse, error) {
+func (db *PostgreSQL) GetAllVersionsByAgentName(ctx context.Context, tx pgx.Tx, agentName string, publishedOnly bool, approvedOnly bool) ([]*models.AgentResponse, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -1292,8 +1333,19 @@ func (db *PostgreSQL) GetAllVersionsByAgentName(ctx context.Context, tx pgx.Tx, 
 		SELECT agent_name, version, status, published_at, updated_at, is_latest, approval_status, approval_reason, approval_date, value
 		FROM agents
 		WHERE agent_name = $1
+	`
+
+	if publishedOnly {
+		query += ` AND published = true`
+	}
+	if approvedOnly {
+		query += ` AND approval_status = 'APPROVED'`
+	}
+
+	query += `
 		ORDER BY published_at DESC
 	`
+
 	rows, err := db.getExecutor(tx).Query(ctx, query, agentName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query agent versions: %w", err)
@@ -1624,6 +1676,27 @@ func (db *PostgreSQL) IsAgentPublished(ctx context.Context, tx pgx.Tx, agentName
 	}
 
 	return published, nil
+}
+
+// IsAgentApproved checks if an agent is approved
+func (db *PostgreSQL) IsAgentApproved(ctx context.Context, tx pgx.Tx, agentName, version string) (bool, error) {
+	if ctx.Err() != nil {
+		return false, ctx.Err()
+	}
+
+	executor := db.getExecutor(tx)
+	query := `SELECT approval_status FROM agents WHERE agent_name = $1 AND version = $2`
+
+	var status string
+	err := executor.QueryRow(ctx, query, agentName, version).Scan(&status)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, ErrNotFound
+		}
+		return false, fmt.Errorf("failed to check if agent is approved: %w", err)
+	}
+
+	return status == "APPROVED", nil
 }
 
 // ApproveAgent marks an agent as approved
@@ -2264,6 +2337,27 @@ func (db *PostgreSQL) IsSkillPublished(ctx context.Context, tx pgx.Tx, skillName
 	}
 
 	return published, nil
+}
+
+// IsSkillApproved checks if a skill is approved
+func (db *PostgreSQL) IsSkillApproved(ctx context.Context, tx pgx.Tx, skillName, version string) (bool, error) {
+	if ctx.Err() != nil {
+		return false, ctx.Err()
+	}
+
+	executor := db.getExecutor(tx)
+	query := `SELECT approval_status FROM skills WHERE skill_name = $1 AND version = $2`
+
+	var status string
+	err := executor.QueryRow(ctx, query, skillName, version).Scan(&status)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, ErrNotFound
+		}
+		return false, fmt.Errorf("failed to check if skill is approved: %w", err)
+	}
+
+	return status == "APPROVED", nil
 }
 
 // ApproveSkill marks a skill as approved

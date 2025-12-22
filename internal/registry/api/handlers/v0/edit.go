@@ -70,7 +70,8 @@ func RegisterEditEndpoints(api huma.API, pathPrefix string, registry service.Reg
 
 		// Get current server to check permissions against existing name
 		// Only allow editing unpublished servers
-		currentServer, err := registry.GetServerByNameAndVersion(ctx, serverName, version, false)
+		// TODO: Edge case: If a server is approved, it can be edited. This is not ideal, so we'll need to either not allow editing outside of "PENDING" status, or find a way to stage the edit for approval.
+		currentServer, err := registry.GetServerByNameAndVersion(ctx, serverName, version, false, false)
 		if err != nil {
 			if errors.Is(err, database.ErrNotFound) {
 				return nil, huma.Error404NotFound("Server not found")

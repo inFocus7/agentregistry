@@ -39,6 +39,7 @@ type ServerVersionDetailInput struct {
 	Version       string `path:"version" doc:"URL-encoded server version" example:"1.0.0"`
 	All           bool   `query:"all" doc:"If true, return all versions of the server instead of a single version" default:"false"`
 	PublishedOnly bool   `query:"published_only" doc:"If true, only return published versions (only applies when all=true)" default:"false"`
+	ApprovedOnly  bool   `query:"approved_only" doc:"If true, only return approved versions (only applies when all=true)" default:"false"`
 }
 
 // ServerVersionsInput represents the input for listing all versions of a server
@@ -209,12 +210,14 @@ func RegisterServersEndpoints(api huma.API, pathPrefix string, registry service.
 		if input.All {
 			// Determine if we should filter to published only
 			onlyPublished := input.PublishedOnly
+			onlyApproved := input.ApprovedOnly
 			// For public endpoints, always filter to published only
 			if !isAdmin {
 				onlyPublished = true
+				onlyApproved = true
 			}
 
-			servers, err := registry.GetAllVersionsByServerName(ctx, serverName, onlyPublished)
+			servers, err := registry.GetAllVersionsByServerName(ctx, serverName, onlyPublished, onlyApproved)
 			if err != nil {
 				if err.Error() == errRecordNotFound || errors.Is(err, database.ErrNotFound) {
 					return nil, huma.Error404NotFound("Server not found")
@@ -241,8 +244,10 @@ func RegisterServersEndpoints(api huma.API, pathPrefix string, registry service.
 		// Default behavior: return a single version (wrapped in a list for consistency)
 		// For public endpoints, always filter to published only
 		publishedOnly := input.PublishedOnly
+		approvedOnly := input.ApprovedOnly
 		if !isAdmin {
 			publishedOnly = true
+			approvedOnly = true
 		}
 
 		var serverResponse *models.ServerResponse
@@ -250,7 +255,7 @@ func RegisterServersEndpoints(api huma.API, pathPrefix string, registry service.
 		// Handle "latest" as a special version string
 		if version == "latest" {
 			// Get all versions and find the latest one
-			servers, err := registry.GetAllVersionsByServerName(ctx, serverName, publishedOnly)
+			servers, err := registry.GetAllVersionsByServerName(ctx, serverName, publishedOnly, approvedOnly)
 			if err != nil {
 				if err.Error() == errRecordNotFound || errors.Is(err, database.ErrNotFound) {
 					return nil, huma.Error404NotFound("Server not found")
@@ -274,7 +279,7 @@ func RegisterServersEndpoints(api huma.API, pathPrefix string, registry service.
 			}
 			serverResponse = latestServer
 		} else {
-			serverResponse, err = registry.GetServerByNameAndVersion(ctx, serverName, version, publishedOnly)
+			serverResponse, err = registry.GetServerByNameAndVersion(ctx, serverName, version, publishedOnly, approvedOnly)
 			if err != nil {
 				if err.Error() == errRecordNotFound || errors.Is(err, database.ErrNotFound) {
 					return nil, huma.Error404NotFound("Server not found")
@@ -312,7 +317,7 @@ func RegisterServersEndpoints(api huma.API, pathPrefix string, registry service.
 		// Get all versions for this server
 		// For public endpoints, only get published versions (published = true)
 		// For admin endpoints, get all versions (published = true or false)
-		servers, err := registry.GetAllVersionsByServerName(ctx, serverName, !isAdmin)
+		servers, err := registry.GetAllVersionsByServerName(ctx, serverName, !isAdmin, !isAdmin)
 		if err != nil {
 			if err.Error() == errRecordNotFound || errors.Is(err, database.ErrNotFound) {
 				return nil, huma.Error404NotFound("Server not found")
@@ -583,6 +588,9 @@ func RegisterAdminServersApprovalStatusEndpoints(api huma.API, pathPrefix string
 			if errors.Is(err, database.ErrNotFound) {
 				return nil, huma.Error404NotFound("Server not found")
 			}
+			if errors.Is(err, database.ErrCannotChangeApprovalWhileDeployed) {
+				return nil, huma.Error409Conflict("Cannot change approval status while artifact is deployed. Remove deployment first.")
+			}
 			return nil, huma.Error500InternalServerError("Failed to approve server", err)
 		}
 
@@ -616,6 +624,9 @@ func RegisterAdminServersApprovalStatusEndpoints(api huma.API, pathPrefix string
 		if err := registry.DenyServer(ctx, serverName, version, input.Body.Reason); err != nil {
 			if errors.Is(err, database.ErrNotFound) {
 				return nil, huma.Error404NotFound("Server not found")
+			}
+			if errors.Is(err, database.ErrCannotChangeApprovalWhileDeployed) {
+				return nil, huma.Error409Conflict("Cannot change approval status while artifact is deployed. Remove deployment first.")
 			}
 			return nil, huma.Error500InternalServerError("Failed to deny server", err)
 		}

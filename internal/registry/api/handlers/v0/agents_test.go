@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 
 	"github.com/agentregistry-dev/agentregistry/internal/cli/agent/frameworks/common"
-	agentmodels "github.com/agentregistry-dev/agentregistry/internal/models"
+	"github.com/agentregistry-dev/agentregistry/internal/models"
 	v0 "github.com/agentregistry-dev/agentregistry/internal/registry/api/handlers/v0"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/config"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/database"
@@ -26,7 +27,7 @@ func TestListAgentsEndpoint(t *testing.T) {
 	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig(), true)
 
 	// Setup test data
-	_, err := registryService.CreateAgent(ctx, &agentmodels.AgentJSON{
+	_, err := registryService.CreateAgent(ctx, &models.AgentJSON{
 		AgentManifest: common.AgentManifest{
 			Name:        "com.example.agent-alpha",
 			Description: "Alpha test agent",
@@ -42,7 +43,7 @@ func TestListAgentsEndpoint(t *testing.T) {
 	err = registryService.PublishAgent(ctx, "com.example.agent-alpha", "1.0.0")
 	require.NoError(t, err)
 
-	_, err = registryService.CreateAgent(ctx, &agentmodels.AgentJSON{
+	_, err = registryService.CreateAgent(ctx, &models.AgentJSON{
 		AgentManifest: common.AgentManifest{
 			Name:        "com.example.agent-beta",
 			Description: "Beta test agent",
@@ -112,7 +113,7 @@ func TestListAgentsEndpoint(t *testing.T) {
 			assert.Equal(t, tt.expectedStatus, w.Code)
 
 			if tt.expectedStatus == http.StatusOK {
-				var resp agentmodels.AgentListResponse
+				var resp models.AgentListResponse
 				err := json.NewDecoder(w.Body).Decode(&resp)
 				assert.NoError(t, err)
 				assert.Len(t, resp.Agents, tt.expectedCount)
@@ -136,7 +137,7 @@ func TestGetLatestAgentVersionEndpoint(t *testing.T) {
 	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig(), true)
 
 	// Setup test data
-	_, err := registryService.CreateAgent(ctx, &agentmodels.AgentJSON{
+	_, err := registryService.CreateAgent(ctx, &models.AgentJSON{
 		AgentManifest: common.AgentManifest{
 			Name:        "com.example.detail-agent",
 			Description: "Agent for detail testing",
@@ -188,7 +189,7 @@ func TestGetLatestAgentVersionEndpoint(t *testing.T) {
 			assert.Equal(t, tt.expectedStatus, w.Code)
 
 			if tt.expectedStatus == http.StatusOK {
-				var resp agentmodels.AgentResponse
+				var resp models.AgentResponse
 				err := json.NewDecoder(w.Body).Decode(&resp)
 				assert.NoError(t, err)
 				assert.Equal(t, tt.agentName, resp.Agent.Name)
@@ -207,7 +208,7 @@ func TestGetAgentVersionEndpoint(t *testing.T) {
 	agentName := "com.example.version-agent"
 
 	// Setup test data with multiple versions
-	_, err := registryService.CreateAgent(ctx, &agentmodels.AgentJSON{
+	_, err := registryService.CreateAgent(ctx, &models.AgentJSON{
 		AgentManifest: common.AgentManifest{
 			Name:        agentName,
 			Description: "Version test agent v1",
@@ -223,7 +224,7 @@ func TestGetAgentVersionEndpoint(t *testing.T) {
 	err = registryService.PublishAgent(ctx, agentName, "1.0.0")
 	require.NoError(t, err)
 
-	_, err = registryService.CreateAgent(ctx, &agentmodels.AgentJSON{
+	_, err = registryService.CreateAgent(ctx, &models.AgentJSON{
 		AgentManifest: common.AgentManifest{
 			Name:        agentName,
 			Description: "Version test agent v2",
@@ -239,7 +240,7 @@ func TestGetAgentVersionEndpoint(t *testing.T) {
 	require.NoError(t, err)
 
 	// Add version with build metadata for URL encoding test
-	_, err = registryService.CreateAgent(ctx, &agentmodels.AgentJSON{
+	_, err = registryService.CreateAgent(ctx, &models.AgentJSON{
 		AgentManifest: common.AgentManifest{
 			Name:        agentName,
 			Description: "Version test agent with build metadata",
@@ -265,14 +266,14 @@ func TestGetAgentVersionEndpoint(t *testing.T) {
 		version        string
 		expectedStatus int
 		expectedError  string
-		checkResult    func(*testing.T, *agentmodels.AgentResponse)
+		checkResult    func(*testing.T, *models.AgentResponse)
 	}{
 		{
 			name:           "get existing version",
 			agentName:      agentName,
 			version:        "1.0.0",
 			expectedStatus: http.StatusOK,
-			checkResult: func(t *testing.T, resp *agentmodels.AgentResponse) {
+			checkResult: func(t *testing.T, resp *models.AgentResponse) {
 				t.Helper()
 				assert.Equal(t, "1.0.0", resp.Agent.Version)
 				assert.Equal(t, "Version test agent v1", resp.Agent.Description)
@@ -284,7 +285,7 @@ func TestGetAgentVersionEndpoint(t *testing.T) {
 			agentName:      agentName,
 			version:        "2.0.0",
 			expectedStatus: http.StatusOK,
-			checkResult: func(t *testing.T, resp *agentmodels.AgentResponse) {
+			checkResult: func(t *testing.T, resp *models.AgentResponse) {
 				t.Helper()
 				assert.Equal(t, "2.0.0", resp.Agent.Version)
 				assert.True(t, resp.Meta.Official.IsLatest)
@@ -309,7 +310,7 @@ func TestGetAgentVersionEndpoint(t *testing.T) {
 			agentName:      agentName,
 			version:        "1.0.0+20130313144700",
 			expectedStatus: http.StatusOK,
-			checkResult: func(t *testing.T, resp *agentmodels.AgentResponse) {
+			checkResult: func(t *testing.T, resp *models.AgentResponse) {
 				t.Helper()
 				assert.Equal(t, "1.0.0+20130313144700", resp.Agent.Version)
 				assert.Equal(t, "Version test agent with build metadata", resp.Agent.Description)
@@ -330,7 +331,7 @@ func TestGetAgentVersionEndpoint(t *testing.T) {
 			assert.Equal(t, tt.expectedStatus, w.Code)
 
 			if tt.expectedStatus == http.StatusOK {
-				var resp agentmodels.AgentResponse
+				var resp models.AgentResponse
 				err := json.NewDecoder(w.Body).Decode(&resp)
 				assert.NoError(t, err)
 				assert.Equal(t, tt.agentName, resp.Agent.Name)
@@ -356,7 +357,7 @@ func TestGetAllAgentVersionsEndpoint(t *testing.T) {
 	// Setup test data with multiple versions
 	versions := []string{"1.0.0", "1.1.0", "2.0.0"}
 	for _, version := range versions {
-		_, err := registryService.CreateAgent(ctx, &agentmodels.AgentJSON{
+		_, err := registryService.CreateAgent(ctx, &models.AgentJSON{
 			AgentManifest: common.AgentManifest{
 				Name:        agentName,
 				Description: "Multi-version test agent " + version,
@@ -411,7 +412,7 @@ func TestGetAllAgentVersionsEndpoint(t *testing.T) {
 			assert.Equal(t, tt.expectedStatus, w.Code)
 
 			if tt.expectedStatus == http.StatusOK {
-				var resp agentmodels.AgentListResponse
+				var resp models.AgentListResponse
 				err := json.NewDecoder(w.Body).Decode(&resp)
 				assert.NoError(t, err)
 				assert.Len(t, resp.Agents, tt.expectedCount)
@@ -463,7 +464,7 @@ func TestAgentsEndpointEdgeCases(t *testing.T) {
 	}
 
 	for _, agent := range specialAgents {
-		_, err := registryService.CreateAgent(ctx, &agentmodels.AgentJSON{
+		_, err := registryService.CreateAgent(ctx, &models.AgentJSON{
 			AgentManifest: common.AgentManifest{
 				Name:        agent.name,
 				Description: agent.description,
@@ -506,7 +507,7 @@ func TestAgentsEndpointEdgeCases(t *testing.T) {
 
 				assert.Equal(t, http.StatusOK, w.Code)
 
-				var resp agentmodels.AgentResponse
+				var resp models.AgentResponse
 				err := json.NewDecoder(w.Body).Decode(&resp)
 				assert.NoError(t, err)
 				assert.Equal(t, tt.agentName, resp.Agent.Name)
@@ -541,7 +542,7 @@ func TestAgentsEndpointEdgeCases(t *testing.T) {
 				assert.Equal(t, tt.expectedStatus, w.Code)
 
 				if tt.expectedStatus == http.StatusOK {
-					var resp agentmodels.AgentListResponse
+					var resp models.AgentListResponse
 					err := json.NewDecoder(w.Body).Decode(&resp)
 					assert.NoError(t, err)
 					assert.NotNil(t, resp.Metadata)
@@ -561,7 +562,7 @@ func TestAgentsEndpointEdgeCases(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
-		var resp agentmodels.AgentListResponse
+		var resp models.AgentListResponse
 		err := json.NewDecoder(w.Body).Decode(&resp)
 		assert.NoError(t, err)
 
@@ -589,7 +590,7 @@ func TestDeleteAgentVersionEndpoint(t *testing.T) {
 	version := "1.0.0"
 
 	// Setup test data
-	_, err := registryService.CreateAgent(ctx, &agentmodels.AgentJSON{
+	_, err := registryService.CreateAgent(ctx, &models.AgentJSON{
 		AgentManifest: common.AgentManifest{
 			Name:        agentName,
 			Description: "Agent for deletion testing",
@@ -621,7 +622,7 @@ func TestDeleteAgentVersionEndpoint(t *testing.T) {
 		assert.Contains(t, resp.Message, "deleted successfully")
 
 		// Verify agent is actually deleted
-		_, err = registryService.GetAgentByNameAndVersion(ctx, agentName, version)
+		_, err = registryService.GetAgentByNameAndVersion(ctx, agentName, version, false, false)
 		assert.Error(t, err)
 	})
 
@@ -663,7 +664,7 @@ func TestAgentsPublishedAndApprovalStatus_AutoApproveDisabled(t *testing.T) {
 
 	// Create all agents
 	for _, tc := range testCases {
-		_, err := registryService.CreateAgent(ctx, &agentmodels.AgentJSON{
+		_, err := registryService.CreateAgent(ctx, &models.AgentJSON{
 			AgentManifest: common.AgentManifest{
 				Name:        tc.agentName,
 				Description: tc.name,
@@ -701,7 +702,7 @@ func TestAgentsPublishedAndApprovalStatus_AutoApproveDisabled(t *testing.T) {
 		mux.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		var resp agentmodels.AgentListResponse
+		var resp models.AgentListResponse
 		err := json.NewDecoder(w.Body).Decode(&resp)
 		assert.NoError(t, err)
 
@@ -731,13 +732,13 @@ func TestAgentsPublishedAndApprovalStatus_AutoApproveDisabled(t *testing.T) {
 		mux.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		var resp agentmodels.AgentListResponse
+		var resp models.AgentListResponse
 		err := json.NewDecoder(w.Body).Decode(&resp)
 		assert.NoError(t, err)
 
 		// Should see all agents
 		visibleNames := make(map[string]bool)
-		agentMap := make(map[string]*agentmodels.AgentResponse)
+		agentMap := make(map[string]*models.AgentResponse)
 		for i := range resp.Agents {
 			agent := &resp.Agents[i]
 			visibleNames[agent.Agent.Name] = true
@@ -794,7 +795,7 @@ func TestAgentsPublishedAndApprovalStatus_AutoApproveEnabled(t *testing.T) {
 
 	// Create all agents
 	for _, tc := range testCases {
-		_, err := registryService.CreateAgent(ctx, &agentmodels.AgentJSON{
+		_, err := registryService.CreateAgent(ctx, &models.AgentJSON{
 			AgentManifest: common.AgentManifest{
 				Name:        tc.agentName,
 				Description: tc.name,
@@ -832,7 +833,7 @@ func TestAgentsPublishedAndApprovalStatus_AutoApproveEnabled(t *testing.T) {
 		mux.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		var resp agentmodels.AgentListResponse
+		var resp models.AgentListResponse
 		err := json.NewDecoder(w.Body).Decode(&resp)
 		assert.NoError(t, err)
 
@@ -862,13 +863,13 @@ func TestAgentsPublishedAndApprovalStatus_AutoApproveEnabled(t *testing.T) {
 		mux.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		var resp agentmodels.AgentListResponse
+		var resp models.AgentListResponse
 		err := json.NewDecoder(w.Body).Decode(&resp)
 		assert.NoError(t, err)
 
 		// Should see all agents
 		visibleNames := make(map[string]bool)
-		agentMap := make(map[string]*agentmodels.AgentResponse)
+		agentMap := make(map[string]*models.AgentResponse)
 		for i := range resp.Agents {
 			agent := &resp.Agents[i]
 			visibleNames[agent.Agent.Name] = true
@@ -908,7 +909,7 @@ func TestAgentsApprovalEndpoints_AutoApproveDisabled(t *testing.T) {
 	version := "1.0.0"
 
 	// Create agent
-	_, err := registryService.CreateAgent(ctx, &agentmodels.AgentJSON{
+	_, err := registryService.CreateAgent(ctx, &models.AgentJSON{
 		AgentManifest: common.AgentManifest{
 			Name:        agentName,
 			Description: "Agent for approval testing",
@@ -925,12 +926,12 @@ func TestAgentsApprovalEndpoints_AutoApproveDisabled(t *testing.T) {
 	v0.RegisterAgentsEndpoints(api, "/v0", registryService, true)
 	v0.RegisterAdminAgentsApprovalStatusEndpoints(api, "/v0", registryService)
 
-	// Verify initial status is APPROVED
+	// Verify initial status is PENDING
 	initialReq := httptest.NewRequest(http.MethodGet, "/v0/agents/"+url.PathEscape(agentName)+"/versions/"+url.PathEscape(version), nil)
 	initialW := httptest.NewRecorder()
 	mux.ServeHTTP(initialW, initialReq)
 	assert.Equal(t, http.StatusOK, initialW.Code)
-	var initialResp agentmodels.AgentResponse
+	var initialResp models.AgentResponse
 	err = json.NewDecoder(initialW.Body).Decode(&initialResp)
 	assert.NoError(t, err)
 	assert.Equal(t, "PENDING", initialResp.Meta.ApprovalStatus.Status, "New agent should have PENDING approval status")
@@ -961,7 +962,7 @@ func TestAgentsApprovalEndpoints_AutoApproveDisabled(t *testing.T) {
 		mux.ServeHTTP(verifyW, verifyReq)
 
 		assert.Equal(t, http.StatusOK, verifyW.Code)
-		var verifyResp agentmodels.AgentResponse
+		var verifyResp models.AgentResponse
 		err = json.NewDecoder(verifyW.Body).Decode(&verifyResp)
 		assert.NoError(t, err)
 		assert.Equal(t, "APPROVED", verifyResp.Meta.ApprovalStatus.Status, "Agent should have APPROVED status after approval endpoint call")
@@ -971,7 +972,7 @@ func TestAgentsApprovalEndpoints_AutoApproveDisabled(t *testing.T) {
 	t.Run("deny agent", func(t *testing.T) {
 		// Create another agent for denial test
 		agentName2 := "test.denial-agent"
-		_, err := registryService.CreateAgent(ctx, &agentmodels.AgentJSON{
+		_, err := registryService.CreateAgent(ctx, &models.AgentJSON{
 			AgentManifest: common.AgentManifest{
 				Name:        agentName2,
 				Description: "Agent for denial testing",
@@ -1006,7 +1007,7 @@ func TestAgentsApprovalEndpoints_AutoApproveDisabled(t *testing.T) {
 		mux.ServeHTTP(verifyW, verifyReq)
 
 		assert.Equal(t, http.StatusOK, verifyW.Code)
-		var verifyResp agentmodels.AgentResponse
+		var verifyResp models.AgentResponse
 		err = json.NewDecoder(verifyW.Body).Decode(&verifyResp)
 		assert.NoError(t, err)
 		assert.Equal(t, "DENIED", verifyResp.Meta.ApprovalStatus.Status, "Agent should have DENIED status after deny endpoint call")
@@ -1022,7 +1023,7 @@ func TestAgentsApprovalEndpoints_AutoApproveEnabled(t *testing.T) {
 	version := "1.0.0"
 
 	// Create agent
-	_, err := registryService.CreateAgent(ctx, &agentmodels.AgentJSON{
+	_, err := registryService.CreateAgent(ctx, &models.AgentJSON{
 		AgentManifest: common.AgentManifest{
 			Name:        agentName,
 			Description: "Agent for approval testing",
@@ -1044,7 +1045,7 @@ func TestAgentsApprovalEndpoints_AutoApproveEnabled(t *testing.T) {
 	initialW := httptest.NewRecorder()
 	mux.ServeHTTP(initialW, initialReq)
 	assert.Equal(t, http.StatusOK, initialW.Code)
-	var initialResp agentmodels.AgentResponse
+	var initialResp models.AgentResponse
 	err = json.NewDecoder(initialW.Body).Decode(&initialResp)
 	assert.NoError(t, err)
 	assert.Equal(t, "APPROVED", initialResp.Meta.ApprovalStatus.Status, "New agent should have APPROVED approval status")
@@ -1075,7 +1076,7 @@ func TestAgentsApprovalEndpoints_AutoApproveEnabled(t *testing.T) {
 		mux.ServeHTTP(verifyW, verifyReq)
 
 		assert.Equal(t, http.StatusOK, verifyW.Code)
-		var verifyResp agentmodels.AgentResponse
+		var verifyResp models.AgentResponse
 		err = json.NewDecoder(verifyW.Body).Decode(&verifyResp)
 		assert.NoError(t, err)
 		assert.Equal(t, "APPROVED", verifyResp.Meta.ApprovalStatus.Status, "Agent should have APPROVED status after approval endpoint call")
@@ -1085,7 +1086,7 @@ func TestAgentsApprovalEndpoints_AutoApproveEnabled(t *testing.T) {
 	t.Run("deny agent", func(t *testing.T) {
 		// Create another agent for denial test
 		agentName2 := "test.denial-agent"
-		_, err := registryService.CreateAgent(ctx, &agentmodels.AgentJSON{
+		_, err := registryService.CreateAgent(ctx, &models.AgentJSON{
 			AgentManifest: common.AgentManifest{
 				Name:        agentName2,
 				Description: "Agent for denial testing",
@@ -1120,10 +1121,89 @@ func TestAgentsApprovalEndpoints_AutoApproveEnabled(t *testing.T) {
 		mux.ServeHTTP(verifyW, verifyReq)
 
 		assert.Equal(t, http.StatusOK, verifyW.Code)
-		var verifyResp agentmodels.AgentResponse
+		var verifyResp models.AgentResponse
 		err = json.NewDecoder(verifyW.Body).Decode(&verifyResp)
 		assert.NoError(t, err)
 		assert.Equal(t, "DENIED", verifyResp.Meta.ApprovalStatus.Status, "Agent should have DENIED status after deny endpoint call")
 		assert.Equal(t, "Test denial reason", *verifyResp.Meta.ApprovalStatus.Reason, "Agent should have the denial reason after deny endpoint call")
+	})
+}
+
+func TestAgentsDeploymentRequiresApproval(t *testing.T) {
+	ctx := context.Background()
+	testDB := database.NewTestDB(t)
+	registryService := service.NewRegistryService(testDB, &config.Config{
+		AgentGatewayPort: 21212,
+	}, false) // Auto-approval is disabled for testing
+
+	// Create API
+	mux := http.NewServeMux()
+	api := humago.New(mux, huma.DefaultConfig("Test API", "1.0.0"))
+	v0.RegisterAdminAgentsApprovalStatusEndpoints(api, "/v0", registryService)
+	v0.RegisterAgentsEndpoints(api, "/v0", registryService, true)
+	v0.RegisterDeploymentsEndpoints(api, "/v0", registryService)
+
+	agentName := "com.example.test-agent"
+	version := "1.0.0"
+
+	// Create agent
+	_, err := registryService.CreateAgent(ctx, &models.AgentJSON{
+		AgentManifest: common.AgentManifest{
+			Name:        agentName,
+			Description: "Agent for deployment approval testing",
+		},
+		Version: version,
+	})
+	require.NoError(t, err)
+
+	t.Run("Deploy requires approval - returns 404 for unapproved agents", func(t *testing.T) {
+		// Publish first
+		err = registryService.PublishAgent(ctx, agentName, version)
+		require.NoError(t, err)
+
+		payload := map[string]interface{}{
+			"serverName":   agentName,
+			"version":      version,
+			"resourceType": "agent",
+		}
+		body, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/v0/deployments", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+
+		// NotFound since we filter agents by published and approved
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("Cannot change approval while deployed", func(t *testing.T) {
+		approvePayload := map[string]interface{}{
+			"reason": "approved for deployment test",
+		}
+		approveBody, _ := json.Marshal(approvePayload)
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/v0/agents/%s/versions/%s/approve", url.PathEscape(agentName), version), bytes.NewReader(approveBody))
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		// Mock deployment record directly in DB to avoid ReconcileAll
+		err = testDB.CreateDeployment(ctx, nil, &models.Deployment{
+			ServerName:   agentName,
+			Version:      version,
+			Status:       "active",
+			ResourceType: "agent",
+		})
+		require.NoError(t, err)
+
+		// Try to deny
+		denyPayload := map[string]interface{}{
+			"reason": "trying to deny deployed agent",
+		}
+		denyBody, _ := json.Marshal(denyPayload)
+		req = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/v0/agents/%s/versions/%s/deny", url.PathEscape(agentName), version), bytes.NewReader(denyBody))
+		w = httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusConflict, w.Code)
+		assert.Contains(t, w.Body.String(), "Cannot change approval status while artifact is deployed")
 	})
 }

@@ -31,8 +31,10 @@ type AgentDetailInput struct {
 
 // AgentVersionDetailInput represents the input for getting a specific version
 type AgentVersionDetailInput struct {
-	AgentName string `path:"agentName" doc:"URL-encoded agent name" example:"com.example%2Fmy-agent"`
-	Version   string `path:"version" doc:"URL-encoded agent version" example:"1.0.0"`
+	AgentName     string `path:"agentName" doc:"URL-encoded agent name" example:"com.example%2Fmy-agent"`
+	Version       string `path:"version" doc:"URL-encoded agent version" example:"1.0.0"`
+	PublishedOnly bool   `query:"published_only" doc:"Only return published agents" default:"false" example:"true"`
+	ApprovedOnly  bool   `query:"approved_only" doc:"Only return approved agents" default:"false" example:"true"`
 }
 
 // AgentVersionsInput represents the input for listing all versions of an agent
@@ -126,11 +128,19 @@ func RegisterAgentsEndpoints(api huma.API, pathPrefix string, registry service.R
 			return nil, huma.Error400BadRequest("Invalid version encoding", err)
 		}
 
+		onlyPublished := input.PublishedOnly
+		onlyApproved := input.ApprovedOnly
+		if !isAdmin {
+			onlyPublished = true
+			onlyApproved = true
+		}
+
 		var agentResp *agentmodels.AgentResponse
 		if version == "latest" {
+			// TODO: Update to allow for filtering by published only
 			agentResp, err = registry.GetAgentByName(ctx, agentName)
 		} else {
-			agentResp, err = registry.GetAgentByNameAndVersion(ctx, agentName, version)
+			agentResp, err = registry.GetAgentByNameAndVersion(ctx, agentName, version, onlyPublished, onlyApproved)
 		}
 		if err != nil {
 			if err.Error() == errRecordNotFound || errors.Is(err, database.ErrNotFound) {
@@ -184,7 +194,7 @@ func RegisterAgentsEndpoints(api huma.API, pathPrefix string, registry service.R
 			return nil, huma.Error400BadRequest("Invalid agent name encoding", err)
 		}
 
-		agents, err := registry.GetAllVersionsByAgentName(ctx, agentName)
+		agents, err := registry.GetAllVersionsByAgentName(ctx, agentName, !isAdmin, !isAdmin)
 		if err != nil {
 			if err.Error() == errRecordNotFound || errors.Is(err, database.ErrNotFound) {
 				return nil, huma.Error404NotFound("Agent not found")
@@ -390,6 +400,9 @@ func RegisterAdminAgentsApprovalStatusEndpoints(api huma.API, pathPrefix string,
 			if errors.Is(err, database.ErrNotFound) {
 				return nil, huma.Error404NotFound("Agent not found")
 			}
+			if errors.Is(err, database.ErrCannotChangeApprovalWhileDeployed) {
+				return nil, huma.Error409Conflict("Cannot change approval status while artifact is deployed. Remove deployment first.")
+			}
 			return nil, huma.Error500InternalServerError("Failed to approve agent", err)
 		}
 
@@ -423,6 +436,9 @@ func RegisterAdminAgentsApprovalStatusEndpoints(api huma.API, pathPrefix string,
 		if err := registry.DenyAgent(ctx, agentName, version, input.Body.Reason); err != nil {
 			if errors.Is(err, database.ErrNotFound) {
 				return nil, huma.Error404NotFound("Agent not found")
+			}
+			if errors.Is(err, database.ErrCannotChangeApprovalWhileDeployed) {
+				return nil, huma.Error409Conflict("Cannot change approval status while artifact is deployed. Remove deployment first.")
 			}
 			return nil, huma.Error500InternalServerError("Failed to deny agent", err)
 		}

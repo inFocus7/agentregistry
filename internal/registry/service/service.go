@@ -20,9 +20,9 @@ type RegistryService interface {
 	// GetServerByName retrieve latest version of a server by server name
 	GetServerByName(ctx context.Context, serverName string) (*models.ServerResponse, error)
 	// GetServerByNameAndVersion retrieve specific version of a server by server name and version
-	GetServerByNameAndVersion(ctx context.Context, serverName string, version string, publishedOnly bool) (*models.ServerResponse, error)
+	GetServerByNameAndVersion(ctx context.Context, serverName string, version string, publishedOnly bool, approvedOnly bool) (*models.ServerResponse, error)
 	// GetAllVersionsByServerName retrieve all versions of a server by server name
-	GetAllVersionsByServerName(ctx context.Context, serverName string, publishedOnly bool) ([]*models.ServerResponse, error)
+	GetAllVersionsByServerName(ctx context.Context, serverName string, publishedOnly bool, approvedOnly bool) ([]*models.ServerResponse, error)
 	// CreateServer creates a new server version
 	CreateServer(ctx context.Context, req *apiv0.ServerJSON) (*models.ServerResponse, error)
 	// UpdateServer updates an existing server and optionally its status
@@ -50,9 +50,9 @@ type RegistryService interface {
 	// GetAgentByName retrieve latest version of an agent by name
 	GetAgentByName(ctx context.Context, agentName string) (*models.AgentResponse, error)
 	// GetAgentByNameAndVersion retrieve specific version of an agent by name and version
-	GetAgentByNameAndVersion(ctx context.Context, agentName string, version string) (*models.AgentResponse, error)
+	GetAgentByNameAndVersion(ctx context.Context, agentName string, version string, publishedOnly bool, approvedOnly bool) (*models.AgentResponse, error)
 	// GetAllVersionsByAgentName retrieve all versions of an agent by name
-	GetAllVersionsByAgentName(ctx context.Context, agentName string) ([]*models.AgentResponse, error)
+	GetAllVersionsByAgentName(ctx context.Context, agentName string, publishedOnly bool, approvedOnly bool) ([]*models.AgentResponse, error)
 	// CreateAgent creates a new agent version
 	CreateAgent(ctx context.Context, req *models.AgentJSON) (*models.AgentResponse, error)
 	// PublishAgent marks an agent as published

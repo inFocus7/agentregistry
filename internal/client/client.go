@@ -168,10 +168,10 @@ func (c *Client) GetVersion() (*internalv0.VersionBody, error) {
 	return &resp, nil
 }
 
-func (c *Client) GetAllServers() ([]*v0.ServerResponse, error) {
+func (c *Client) GetAllServers() ([]*models.ServerResponse, error) {
 	limit := 100
 	cursor := ""
-	var all []*v0.ServerResponse
+	var all []*models.ServerResponse
 
 	for {
 		req, err := c.newAdminRequest(http.MethodGet, "/admin/v0/servers?limit="+strconv.Itoa(limit)+"&cursor="+url.QueryEscape(cursor))
@@ -179,7 +179,7 @@ func (c *Client) GetAllServers() ([]*v0.ServerResponse, error) {
 			return nil, err
 		}
 
-		var resp v0.ServerListResponse
+		var resp models.ServerListResponse
 		if err := c.doJSON(req, &resp); err != nil {
 			return nil, err
 		}
@@ -198,11 +198,11 @@ func (c *Client) GetAllServers() ([]*v0.ServerResponse, error) {
 }
 
 // GetPublishedServers returns all published MCP servers
-func (c *Client) GetPublishedServers() ([]*v0.ServerResponse, error) {
+func (c *Client) GetPublishedServers() ([]*models.ServerResponse, error) {
 	// Cursor-based pagination to fetch all servers
 	limit := 100
 	cursor := ""
-	var all []*v0.ServerResponse
+	var all []*models.ServerResponse
 
 	for {
 		q := fmt.Sprintf("/servers?limit=%d", limit)
@@ -214,7 +214,7 @@ func (c *Client) GetPublishedServers() ([]*v0.ServerResponse, error) {
 			return nil, err
 		}
 
-		var resp v0.ServerListResponse
+		var resp models.ServerListResponse
 		if err := c.doJSON(req, &resp); err != nil {
 			return nil, err
 		}
@@ -233,12 +233,12 @@ func (c *Client) GetPublishedServers() ([]*v0.ServerResponse, error) {
 }
 
 // GetServerByName returns a server by name (latest version)
-func (c *Client) GetServerByName(name string, publishedOnly bool) (*v0.ServerResponse, error) {
-	return c.GetServerByNameAndVersion(name, "latest", publishedOnly)
+func (c *Client) GetServerByName(name string, publishedOnly bool, approvedOnly bool) (*models.ServerResponse, error) {
+	return c.GetServerByNameAndVersion(name, "latest", publishedOnly, approvedOnly)
 }
 
 // GetServerByNameAndVersion returns a specific version of a server
-func (c *Client) GetServerByNameAndVersion(name, version string, publishedOnly bool) (*v0.ServerResponse, error) {
+func (c *Client) GetServerByNameAndVersion(name, version string, publishedOnly bool, approvedOnly bool) (*models.ServerResponse, error) {
 	// Use the version endpoint
 	encName := url.PathEscape(name)
 	encVersion := url.PathEscape(version)
@@ -246,12 +246,15 @@ func (c *Client) GetServerByNameAndVersion(name, version string, publishedOnly b
 	if publishedOnly {
 		q += "?published_only=true"
 	}
+	if approvedOnly {
+		q += "?approved_only=true"
+	}
 	req, err := c.newRequest(http.MethodGet, q)
 	if err != nil {
 		return nil, err
 	}
 	// The endpoint now returns ServerListResponse (even for a single version)
-	var resp v0.ServerListResponse
+	var resp models.ServerListResponse
 	if err := c.doJSON(req, &resp); err != nil {
 		// 404 -> not found returns nil
 		if respErr := asHTTPStatus(err); respErr == http.StatusNotFound {
@@ -268,14 +271,14 @@ func (c *Client) GetServerByNameAndVersion(name, version string, publishedOnly b
 }
 
 // GetServerVersions returns all versions of a server by name (public endpoint - only published)
-func (c *Client) GetServerVersions(name string) ([]v0.ServerResponse, error) {
+func (c *Client) GetServerVersions(name string) ([]models.ServerResponse, error) {
 	encName := url.PathEscape(name)
 	req, err := c.newRequest(http.MethodGet, "/servers/"+encName+"/versions")
 	if err != nil {
 		return nil, err
 	}
 
-	var resp v0.ServerListResponse
+	var resp models.ServerListResponse
 	if err := c.doJSON(req, &resp); err != nil {
 		// 404 -> not found returns empty list
 		if respErr := asHTTPStatus(err); respErr == http.StatusNotFound {
@@ -288,7 +291,7 @@ func (c *Client) GetServerVersions(name string) ([]v0.ServerResponse, error) {
 }
 
 // GetAllServerVersionsAdmin returns all versions of a server by name (admin endpoint - includes unpublished)
-func (c *Client) GetAllServerVersionsAdmin(name string) ([]v0.ServerResponse, error) {
+func (c *Client) GetAllServerVersionsAdmin(name string) ([]models.ServerResponse, error) {
 	encName := url.PathEscape(name)
 
 	req, err := c.newAdminRequest(http.MethodGet, "/admin/v0/servers/"+encName+"/versions")
@@ -296,7 +299,7 @@ func (c *Client) GetAllServerVersionsAdmin(name string) ([]v0.ServerResponse, er
 		return nil, err
 	}
 
-	var resp v0.ServerListResponse
+	var resp models.ServerListResponse
 	if err := c.doJSON(req, &resp); err != nil {
 		// 404 -> not found returns empty list
 		if respErr := asHTTPStatus(err); respErr == http.StatusNotFound {
@@ -389,9 +392,16 @@ func (c *Client) GetAgents() ([]*models.AgentResponse, error) {
 	return all, nil
 }
 
-func (c *Client) GetAgentByName(name string) (*models.AgentResponse, error) {
+func (c *Client) GetAgentByName(name string, publishedOnly bool, approvedOnly bool) (*models.AgentResponse, error) {
 	encName := url.PathEscape(name)
-	req, err := c.newRequest(http.MethodGet, "/agents/"+encName+"/versions/latest")
+	q := "/agents/" + encName + "/versions/latest"
+	if publishedOnly {
+		q += "?published_only=true"
+	}
+	if approvedOnly {
+		q += "?approved_only=true"
+	}
+	req, err := c.newRequest(http.MethodGet, q)
 	if err != nil {
 		return nil, err
 	}
@@ -403,10 +413,17 @@ func (c *Client) GetAgentByName(name string) (*models.AgentResponse, error) {
 }
 
 // GetAgentByNameAndVersion returns a specific version of an agent
-func (c *Client) GetAgentByNameAndVersion(name, version string) (*models.AgentResponse, error) {
+func (c *Client) GetAgentByNameAndVersion(name, version string, publishedOnly bool, approvedOnly bool) (*models.AgentResponse, error) {
 	encName := url.PathEscape(name)
 	encVersion := url.PathEscape(version)
-	req, err := c.newRequest(http.MethodGet, "/agents/"+encName+"/versions/"+encVersion)
+	q := "/agents/" + encName + "/versions/" + encVersion
+	if publishedOnly {
+		q += "?published_only=true"
+	}
+	if approvedOnly {
+		q += "?approved_only=true"
+	}
+	req, err := c.newRequest(http.MethodGet, q)
 	if err != nil {
 		return nil, err
 	}
@@ -564,8 +581,8 @@ func (c *Client) UnpublishAgentStatus(name, version string) error {
 }
 
 // PushMCPServer creates an MCP server entry in the registry without publishing (published=false)
-func (c *Client) PushMCPServer(server *v0.ServerJSON) (*v0.ServerResponse, error) {
-	var resp v0.ServerResponse
+func (c *Client) PushMCPServer(server *v0.ServerJSON) (*models.ServerResponse, error) {
+	var resp models.ServerResponse
 	err := c.doJsonRequest(http.MethodPost, "/servers/push", server, &resp)
 	return &resp, err
 }
