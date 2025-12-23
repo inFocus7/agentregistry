@@ -795,7 +795,6 @@ func (s *registryServiceImpl) DeployServer(ctx context.Context, serverName, vers
 }
 
 // DeployAgent deploys an agent with configuration
-// TODO(infocus7): Why doesn't the GetAgentByNameAndVersion check for published, but mcp servers do? shouldn't we ensure for published if deployed?
 func (s *registryServiceImpl) DeployAgent(ctx context.Context, agentName, version string, config map[string]string, preferRemote bool) (*models.Deployment, error) {
 	agentResp, err := s.db.GetAgentByNameAndVersion(ctx, nil, agentName, version, true, true)
 	if err != nil {
