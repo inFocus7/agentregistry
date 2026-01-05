@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/agentregistry-dev/agentregistry/internal/registry/auth"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/database"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/service"
+	"github.com/agentregistry-dev/agentregistry/pkg/registry/auth"
 	"github.com/danielgtaylor/huma/v2"
 	apiv0 "github.com/modelcontextprotocol/registry/pkg/api/v0"
 )
@@ -444,13 +444,22 @@ func RegisterCreateEndpoint(api huma.API, pathPrefix string, registry service.Re
 			{"bearer": {}},
 		},
 	}, func(ctx context.Context, input *CreateServerInput) (*Response[apiv0.ServerResponse], error) {
+		// Enforce authorization
+		resource := auth.Resource{
+			Name: input.Body.Name,
+			Type: "server",
+		}
+		if err := authz.Check(ctx, auth.PermissionActionPublish, resource); err != nil {
+			return nil, err
+		}
+
 		return createServerHandler(ctx, input, registry)
 	})
 }
 
 // RegisterAdminCreateEndpoint registers the admin create/update server endpoint at /servers
 // This endpoint creates or updates a server in the registry (published defaults to false)
-func RegisterAdminCreateEndpoint(api huma.API, pathPrefix string, registry service.RegistryService) {
+func RegisterAdminCreateEndpoint(api huma.API, pathPrefix string, registry service.RegistryService, authz auth.Authorizer) {
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-create-server" + strings.ReplaceAll(pathPrefix, "/", "-"),
 		Method:      http.MethodPost,
@@ -459,13 +468,21 @@ func RegisterAdminCreateEndpoint(api huma.API, pathPrefix string, registry servi
 		Description: "Create a new MCP server in the registry or update an existing one. By default, servers are created as unpublished (published=false).",
 		Tags:        []string{"servers", "admin"},
 	}, func(ctx context.Context, input *CreateServerInput) (*Response[apiv0.ServerResponse], error) {
+		// Enforce authorization
+		resource := auth.Resource{
+			Name: input.Body.Name,
+			Type: "server",
+		}
+		if err := authz.Check(ctx, auth.PermissionActionPublish, resource); err != nil {
+			return nil, err
+		}
 		return createServerHandler(ctx, input, registry)
 	})
 }
 
 // RegisterPublishStatusEndpoints registers the publish/unpublish status endpoints for servers
 // These endpoints change the published status of existing servers
-func RegisterPublishStatusEndpoints(api huma.API, pathPrefix string, registry service.RegistryService) {
+func RegisterPublishStatusEndpoints(api huma.API, pathPrefix string, registry service.RegistryService, authz auth.Authorizer) {
 	// Publish server endpoint - marks an existing server as published
 	huma.Register(api, huma.Operation{
 		OperationID: "publish-server-status" + strings.ReplaceAll(pathPrefix, "/", "-"),
@@ -483,6 +500,15 @@ func RegisterPublishStatusEndpoints(api huma.API, pathPrefix string, registry se
 		version, err := url.PathUnescape(input.Version)
 		if err != nil {
 			return nil, huma.Error400BadRequest("Invalid version encoding", err)
+		}
+
+		// Enforce authorization
+		resource := auth.Resource{
+			Name: serverName,
+			Type: "server",
+		}
+		if err := authz.Check(ctx, auth.PermissionActionPublish, resource); err != nil {
+			return nil, err
 		}
 
 		// Call the service to publish the server
@@ -517,6 +543,15 @@ func RegisterPublishStatusEndpoints(api huma.API, pathPrefix string, registry se
 		version, err := url.PathUnescape(input.Version)
 		if err != nil {
 			return nil, huma.Error400BadRequest("Invalid version encoding", err)
+		}
+
+		// Enforce authorization
+		resource := auth.Resource{
+			Name: serverName,
+			Type: "server",
+		}
+		if err := authz.Check(ctx, auth.PermissionActionPublish, resource); err != nil {
+			return nil, err
 		}
 
 		// Call the service to unpublish the server

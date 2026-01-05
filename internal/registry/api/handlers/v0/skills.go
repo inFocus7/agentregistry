@@ -9,9 +9,9 @@ import (
 	"time"
 
 	skillmodels "github.com/agentregistry-dev/agentregistry/internal/models"
-	"github.com/agentregistry-dev/agentregistry/internal/registry/auth"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/database"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/service"
+	"github.com/agentregistry-dev/agentregistry/pkg/registry/auth"
 	"github.com/danielgtaylor/huma/v2"
 )
 
@@ -202,13 +202,22 @@ func RegisterSkillsCreateEndpoint(api huma.API, pathPrefix string, registry serv
 		Tags:        []string{"skills", "publish"},
 		Security:    []map[string][]string{{"bearer": {}}},
 	}, func(ctx context.Context, input *CreateSkillInput) (*Response[skillmodels.SkillResponse], error) {
+		// Enforce authorization
+		resource := auth.Resource{
+			Name: input.Body.Name,
+			Type: "skill",
+		}
+		if err := authz.Check(ctx, auth.PermissionActionPublish, resource); err != nil {
+			return nil, err
+		}
+
 		return createSkillHandler(ctx, input, registry)
 	})
 }
 
 // RegisterAdminSkillsCreateEndpoint registers the admin skills create/update endpoint at /skills
 // This endpoint creates or updates a skill in the registry (published defaults to false)
-func RegisterAdminSkillsCreateEndpoint(api huma.API, pathPrefix string, registry service.RegistryService) {
+func RegisterAdminSkillsCreateEndpoint(api huma.API, pathPrefix string, registry service.RegistryService, authz auth.Authorizer) {
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-create-skill" + strings.ReplaceAll(pathPrefix, "/", "-"),
 		Method:      http.MethodPost,
@@ -217,6 +226,15 @@ func RegisterAdminSkillsCreateEndpoint(api huma.API, pathPrefix string, registry
 		Description: "Create a new Agentic skill in the registry or update an existing one. By default, skills are created as unpublished (published=false).",
 		Tags:        []string{"skills", "admin"},
 	}, func(ctx context.Context, input *CreateSkillInput) (*Response[skillmodels.SkillResponse], error) {
+		// Enforce authorization
+		resource := auth.Resource{
+			Name: input.Body.Name,
+			Type: "skill",
+		}
+		if err := authz.Check(ctx, auth.PermissionActionPublish, resource); err != nil {
+			return nil, err
+		}
+
 		// Create/update the skill (published defaults to false in the service layer)
 		createdSkill, err := registry.CreateSkill(ctx, &input.Body)
 		if err != nil {

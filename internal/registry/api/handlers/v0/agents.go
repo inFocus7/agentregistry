@@ -9,9 +9,9 @@ import (
 	"time"
 
 	agentmodels "github.com/agentregistry-dev/agentregistry/internal/models"
-	"github.com/agentregistry-dev/agentregistry/internal/registry/auth"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/database"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/service"
+	"github.com/agentregistry-dev/agentregistry/pkg/registry/auth"
 	"github.com/danielgtaylor/huma/v2"
 )
 
@@ -233,6 +233,15 @@ func RegisterAgentsCreateEndpoint(api huma.API, pathPrefix string, registry serv
 		Tags:        []string{"agents", "publish"},
 		Security:    []map[string][]string{{"bearer": {}}},
 	}, func(ctx context.Context, input *CreateAgentInput) (*Response[agentmodels.AgentResponse], error) {
+		// Enforce authorization
+		resource := auth.Resource{
+			Name: input.Body.Name,
+			Type: "agent",
+		}
+		if err := authz.Check(ctx, auth.PermissionActionPublish, resource); err != nil {
+			return nil, err
+		}
+
 		return createAgentHandler(ctx, input, registry)
 	})
 
@@ -246,13 +255,22 @@ func RegisterAgentsCreateEndpoint(api huma.API, pathPrefix string, registry serv
 		Tags:        []string{"agents", "publish"},
 		Security:    []map[string][]string{{"bearer": {}}},
 	}, func(ctx context.Context, input *CreateAgentInput) (*Response[agentmodels.AgentResponse], error) {
+		// Enforce authorization
+		resource := auth.Resource{
+			Name: input.Body.Name,
+			Type: "agent",
+		}
+		if err := authz.Check(ctx, auth.PermissionActionPublish, resource); err != nil {
+			return nil, err
+		}
+
 		return createAgentHandler(ctx, input, registry)
 	})
 }
 
 // RegisterAdminAgentsCreateEndpoint registers the admin agents create/update endpoint at /agents
 // This endpoint creates or updates an agent in the registry (published defaults to false)
-func RegisterAdminAgentsCreateEndpoint(api huma.API, pathPrefix string, registry service.RegistryService) {
+func RegisterAdminAgentsCreateEndpoint(api huma.API, pathPrefix string, registry service.RegistryService, authz auth.Authorizer) {
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-create-agent" + strings.ReplaceAll(pathPrefix, "/", "-"),
 		Method:      http.MethodPost,
@@ -261,6 +279,15 @@ func RegisterAdminAgentsCreateEndpoint(api huma.API, pathPrefix string, registry
 		Description: "Create a new Agentic agent in the registry or update an existing one. By default, agents are created as unpublished (published=false).",
 		Tags:        []string{"agents", "admin"},
 	}, func(ctx context.Context, input *CreateAgentInput) (*Response[agentmodels.AgentResponse], error) {
+		// Enforce authorization
+		resource := auth.Resource{
+			Name: input.Body.Name,
+			Type: "agent",
+		}
+		if err := authz.Check(ctx, auth.PermissionActionPublish, resource); err != nil {
+			return nil, err
+		}
+
 		// Create/update the agent (published defaults to false in the service layer)
 		createdAgent, err := registry.CreateAgent(ctx, &input.Body)
 		if err != nil {
