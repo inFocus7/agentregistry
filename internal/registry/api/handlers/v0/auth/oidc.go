@@ -237,8 +237,8 @@ func (h *OIDCHandler) validateExtraClaims(claims *OIDCClaims) error {
 func (h *OIDCHandler) buildPermissions(_ *OIDCClaims) []auth.Permission {
 	var permissions []auth.Permission
 
-	if h.config.OIDCGetPerms != "" {
-		for _, pattern := range strings.Split(h.config.OIDCGetPerms, ",") {
+	if h.config.OIDCReadPerms != "" {
+		for _, pattern := range strings.Split(h.config.OIDCReadPerms, ",") {
 			pattern = strings.TrimSpace(pattern)
 			if pattern != "" {
 				permissions = append(permissions, auth.Permission{
