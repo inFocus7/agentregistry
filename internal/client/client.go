@@ -517,8 +517,12 @@ func (c *Client) DenySkillStatus(name, version string, reason string) error {
 // PushAgent creates an agent entry in the registry without publishing (published=false)
 func (c *Client) PushAgent(agent *models.AgentJSON) (*models.AgentResponse, error) {
 	var resp models.AgentResponse
+	// Remove the TelemetryEndpoint from the manifest
+	// since telemetry is a deployment/runtime concern, not stored in the registry
+	agentCopy := *agent // Create a copy of the agent
+	agentCopy.AgentManifest.TelemetryEndpoint = ""
 	// Use a dedicated /agents/push public endpoint for push (creates unpublished entry)
-	err := c.doJsonRequest(http.MethodPost, "/agents/push", agent, &resp)
+	err := c.doJsonRequest(http.MethodPost, "/agents/push", &agentCopy, &resp)
 	return &resp, err
 }
 
