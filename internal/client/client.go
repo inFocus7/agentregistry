@@ -520,7 +520,7 @@ func (c *Client) PushAgent(agent *models.AgentJSON) (*models.AgentResponse, erro
 	// Remove the TelemetryEndpoint from the manifest
 	// since telemetry is a deployment/runtime concern, not stored in the registry
 	agentCopy := *agent // Create a copy of the agent
-	agentCopy.AgentManifest.TelemetryEndpoint = ""
+	agentCopy.TelemetryEndpoint = ""
 	// Use a dedicated /agents/push public endpoint for push (creates unpublished entry)
 	err := c.doJsonRequest(http.MethodPost, "/agents/push", &agentCopy, &resp)
 	return &resp, err
