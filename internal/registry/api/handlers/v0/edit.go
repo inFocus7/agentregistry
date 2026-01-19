@@ -63,7 +63,7 @@ func RegisterEditEndpoints(api huma.API, pathPrefix string, registry service.Reg
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: serverName,
-			Type: "server",
+			Type: auth.PermissionArtifactTypeServer,
 		}
 		if err := authz.Check(ctx, auth.PermissionActionEdit, resource); err != nil {
 			return nil, err

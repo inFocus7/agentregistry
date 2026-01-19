@@ -261,6 +261,42 @@ func (h *OIDCHandler) buildPermissions(_ *OIDCClaims) []auth.Permission {
 		}
 	}
 
+	if h.config.OIDCPullPerms != "" {
+		for _, pattern := range strings.Split(h.config.OIDCPullPerms, ",") {
+			pattern = strings.TrimSpace(pattern)
+			if pattern != "" {
+				permissions = append(permissions, auth.Permission{
+					Action:          auth.PermissionActionPull,
+					ResourcePattern: pattern,
+				})
+			}
+		}
+	}
+
+	if h.config.OIDCDeployPerms != "" {
+		for _, pattern := range strings.Split(h.config.OIDCDeployPerms, ",") {
+			pattern = strings.TrimSpace(pattern)
+			if pattern != "" {
+				permissions = append(permissions, auth.Permission{
+					Action:          auth.PermissionActionDeploy,
+					ResourcePattern: pattern,
+				})
+			}
+		}
+	}
+
+	if h.config.OIDCRunPerms != "" {
+		for _, pattern := range strings.Split(h.config.OIDCRunPerms, ",") {
+			pattern = strings.TrimSpace(pattern)
+			if pattern != "" {
+				permissions = append(permissions, auth.Permission{
+					Action:          auth.PermissionActionRun,
+					ResourcePattern: pattern,
+				})
+			}
+		}
+	}
+
 	// Parse permission patterns from configuration
 	if h.config.OIDCPublishPerms != "" {
 		for _, pattern := range strings.Split(h.config.OIDCPublishPerms, ",") {

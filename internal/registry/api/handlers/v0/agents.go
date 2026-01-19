@@ -40,6 +40,8 @@ type AgentVersionsInput struct {
 	AgentName string `path:"agentName" doc:"URL-encoded agent name" example:"com.example%2Fmy-agent"`
 }
 
+// TODO(infocus7): authz interface should take in the db, so it can check against permissions set in the db
+
 // RegisterAgentsEndpoints registers all agent-related endpoints with a custom path prefix
 // isAdmin: if true, shows all resources; if false, only shows published resources
 func RegisterAgentsEndpoints(api huma.API, pathPrefix string, registry service.RegistryService, isAdmin bool, authz auth.Authorizer) {
@@ -58,10 +60,12 @@ func RegisterAgentsEndpoints(api huma.API, pathPrefix string, registry service.R
 		Description: "Get a paginated list of Agentic agents from the registry",
 		Tags:        tags,
 	}, func(ctx context.Context, input *ListAgentsInput) (*Response[agentmodels.AgentListResponse], error) {
+		// TODO(infocus7): List should take account any extended DB access control setup, not a global read permission
+
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: "*",
-			Type: "agent",
+			Type: auth.PermissionArtifactTypeAgent,
 		}
 		if err := authz.Check(ctx, auth.PermissionActionRead, resource); err != nil {
 			return nil, err
@@ -135,8 +139,8 @@ func RegisterAgentsEndpoints(api huma.API, pathPrefix string, registry service.R
 
 		// Enforce authorization
 		resource := auth.Resource{
+			Type: auth.PermissionArtifactTypeAgent,
 			Name: agentName,
-			Type: "agent",
 		}
 		if err := authz.Check(ctx, auth.PermissionActionRead, resource); err != nil {
 			return nil, err
@@ -177,7 +181,7 @@ func RegisterAgentsEndpoints(api huma.API, pathPrefix string, registry service.R
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: agentName,
-			Type: "agent",
+			Type: auth.PermissionArtifactTypeAgent,
 		}
 		if err := authz.Check(ctx, auth.PermissionActionDelete, resource); err != nil {
 			return nil, err
@@ -212,7 +216,7 @@ func RegisterAgentsEndpoints(api huma.API, pathPrefix string, registry service.R
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: agentName,
-			Type: "agent",
+			Type: auth.PermissionArtifactTypeAgent,
 		}
 		if err := authz.Check(ctx, auth.PermissionActionRead, resource); err != nil {
 			return nil, err
@@ -272,7 +276,7 @@ func RegisterAgentsCreateEndpoint(api huma.API, pathPrefix string, registry serv
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: input.Body.Name,
-			Type: "agent",
+			Type: auth.PermissionArtifactTypeAgent,
 		}
 
 		// check if the agent already exists to decide the action
@@ -307,7 +311,7 @@ func RegisterAgentsCreateEndpoint(api huma.API, pathPrefix string, registry serv
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: input.Body.Name,
-			Type: "agent",
+			Type: auth.PermissionArtifactTypeAgent,
 		}
 		if err := authz.Check(ctx, auth.PermissionActionPush, resource); err != nil {
 			return nil, err
@@ -331,7 +335,7 @@ func RegisterAdminAgentsCreateEndpoint(api huma.API, pathPrefix string, registry
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: input.Body.Name,
-			Type: "agent",
+			Type: auth.PermissionArtifactTypeAgent,
 		}
 
 		// check if the agent already exists to decide the action
@@ -384,7 +388,7 @@ func RegisterAgentsPublishStatusEndpoints(api huma.API, pathPrefix string, regis
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: agentName,
-			Type: "agent",
+			Type: auth.PermissionArtifactTypeAgent,
 		}
 		if err := authz.Check(ctx, auth.PermissionActionPublish, resource); err != nil {
 			return nil, err
@@ -427,7 +431,7 @@ func RegisterAgentsPublishStatusEndpoints(api huma.API, pathPrefix string, regis
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: agentName,
-			Type: "agent",
+			Type: auth.PermissionArtifactTypeAgent,
 		}
 		if err := authz.Check(ctx, auth.PermissionActionPublish, resource); err != nil {
 			return nil, err

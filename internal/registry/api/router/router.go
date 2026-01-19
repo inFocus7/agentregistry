@@ -143,18 +143,15 @@ func NewHumaAPI(cfg *config.Config, registry service.RegistryService, mux *http.
 	api := humago.New(mux, humaConfig)
 
 	// Use provided auth or fallback to JWT manager
-	effectiveAuthzProvider := authzProvider
-	effectiveAuthnProvider := authnProvider
-
-	if effectiveAuthzProvider == nil {
-		effectiveAuthzProvider = jwtManager
+	if authzProvider == nil {
+		authzProvider = jwtManager
 	}
-	if effectiveAuthnProvider == nil {
-		effectiveAuthnProvider = jwtManager
+	if authnProvider == nil {
+		authnProvider = jwtManager
 	}
 
-	authz := auth.Authorizer{Authz: effectiveAuthzProvider}
-	api.UseMiddleware(auth.AuthnMiddleware(effectiveAuthnProvider))
+	authz := auth.Authorizer{Authz: authzProvider}
+	api.UseMiddleware(auth.AuthnMiddleware(authnProvider))
 
 	// Add OpenAPI tag metadata with descriptions
 	api.OpenAPI().Tags = []*huma.Tag{

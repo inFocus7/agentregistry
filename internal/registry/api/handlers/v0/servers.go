@@ -70,7 +70,7 @@ func RegisterServersEndpoints(api huma.API, pathPrefix string, registry service.
 			// Enforce authorization
 			resource := auth.Resource{
 				Name: input.ServerName,
-				Type: "server",
+				Type: auth.PermissionArtifactTypeServer,
 			}
 			if err := authz.Check(ctx, auth.PermissionActionDelete, resource); err != nil {
 				return nil, err
@@ -115,7 +115,7 @@ func RegisterServersEndpoints(api huma.API, pathPrefix string, registry service.
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: input.Body.Name,
-			Type: "server",
+			Type: auth.PermissionArtifactTypeServer,
 		}
 		if err := authz.Check(ctx, auth.PermissionActionPush, resource); err != nil {
 			return nil, err
@@ -139,10 +139,12 @@ func RegisterServersEndpoints(api huma.API, pathPrefix string, registry service.
 		Description: "Get a paginated list of MCP servers from the registry",
 		Tags:        tags,
 	}, func(ctx context.Context, input *ListServersInput) (*Response[apiv0.ServerListResponse], error) {
+		// TODO(infocus7): List should take account any extended DB access control setup, not a global read permission
+
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: "*",
-			Type: "server",
+			Type: auth.PermissionArtifactTypeServer,
 		}
 		if err := authz.Check(ctx, auth.PermissionActionRead, resource); err != nil {
 			return nil, err
@@ -232,7 +234,7 @@ func RegisterServersEndpoints(api huma.API, pathPrefix string, registry service.
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: serverName,
-			Type: "server",
+			Type: auth.PermissionArtifactTypeServer,
 		}
 		if err := authz.Check(ctx, auth.PermissionActionRead, resource); err != nil {
 			return nil, err
@@ -345,7 +347,7 @@ func RegisterServersEndpoints(api huma.API, pathPrefix string, registry service.
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: serverName,
-			Type: "server",
+			Type: auth.PermissionArtifactTypeServer,
 		}
 		if err := authz.Check(ctx, auth.PermissionActionRead, resource); err != nil {
 			return nil, err
@@ -395,7 +397,7 @@ func RegisterServersEndpoints(api huma.API, pathPrefix string, registry service.
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: serverName,
-			Type: "server",
+			Type: auth.PermissionArtifactTypeServer,
 		}
 		if err := authz.Check(ctx, auth.PermissionActionRead, resource); err != nil {
 			return nil, err
@@ -435,7 +437,7 @@ func RegisterServersEndpoints(api huma.API, pathPrefix string, registry service.
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: serverName,
-			Type: "server",
+			Type: auth.PermissionArtifactTypeServer,
 		}
 		if err := authz.Check(ctx, auth.PermissionActionRead, resource); err != nil {
 			return nil, err
@@ -510,7 +512,7 @@ func RegisterCreateEndpoint(api huma.API, pathPrefix string, registry service.Re
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: input.Body.Name,
-			Type: "server",
+			Type: auth.PermissionArtifactTypeServer,
 		}
 
 		// check if the server already exists to decide the action
@@ -547,7 +549,7 @@ func RegisterAdminCreateEndpoint(api huma.API, pathPrefix string, registry servi
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: input.Body.Name,
-			Type: "server",
+			Type: auth.PermissionArtifactTypeServer,
 		}
 
 		// check if the server already exists to decide the action
@@ -595,7 +597,7 @@ func RegisterPublishStatusEndpoints(api huma.API, pathPrefix string, registry se
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: serverName,
-			Type: "server",
+			Type: auth.PermissionArtifactTypeServer,
 		}
 		if err := authz.Check(ctx, auth.PermissionActionPublish, resource); err != nil {
 			return nil, err
@@ -638,7 +640,7 @@ func RegisterPublishStatusEndpoints(api huma.API, pathPrefix string, registry se
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: serverName,
-			Type: "server",
+			Type: auth.PermissionArtifactTypeServer,
 		}
 		if err := authz.Check(ctx, auth.PermissionActionPublish, resource); err != nil {
 			return nil, err

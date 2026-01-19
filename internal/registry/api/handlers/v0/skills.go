@@ -58,10 +58,12 @@ func RegisterSkillsEndpoints(api huma.API, pathPrefix string, registry service.R
 		Description: "Get a paginated list of Agentic skills from the registry",
 		Tags:        tags,
 	}, func(ctx context.Context, input *ListSkillsInput) (*Response[skillmodels.SkillListResponse], error) {
+		// TODO(infocus7): List should take account any extended DB access control setup, not a global read permission
+
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: "*",
-			Type: "skill",
+			Type: auth.PermissionArtifactTypeSkill,
 		}
 		if err := authz.Check(ctx, auth.PermissionActionRead, resource); err != nil {
 			return nil, err
@@ -136,7 +138,7 @@ func RegisterSkillsEndpoints(api huma.API, pathPrefix string, registry service.R
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: skillName,
-			Type: "skill",
+			Type: auth.PermissionArtifactTypeSkill,
 		}
 		if err := authz.Check(ctx, auth.PermissionActionRead, resource); err != nil {
 			return nil, err
@@ -174,7 +176,7 @@ func RegisterSkillsEndpoints(api huma.API, pathPrefix string, registry service.R
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: skillName,
-			Type: "skill",
+			Type: auth.PermissionArtifactTypeSkill,
 		}
 		if err := authz.Check(ctx, auth.PermissionActionRead, resource); err != nil {
 			return nil, err
@@ -233,9 +235,22 @@ func RegisterSkillsCreateEndpoint(api huma.API, pathPrefix string, registry serv
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: input.Body.Name,
-			Type: "skill",
+			Type: auth.PermissionArtifactTypeSkill,
 		}
-		if err := authz.Check(ctx, auth.PermissionActionPush, resource); err != nil {
+
+		// Check if the skill already exists to decide the action
+		existingSkill, err := registry.GetSkillByName(ctx, input.Body.Name)
+		if err != nil && err != database.ErrNotFound {
+			return nil, huma.Error500InternalServerError("Failed to check if skill exists", err)
+		}
+		var action auth.PermissionAction
+		if existingSkill != nil {
+			action = auth.PermissionActionEdit
+		} else {
+			action = auth.PermissionActionPush
+		}
+
+		if err := authz.Check(ctx, action, resource); err != nil {
 			return nil, err
 		}
 
@@ -257,7 +272,7 @@ func RegisterAdminSkillsCreateEndpoint(api huma.API, pathPrefix string, registry
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: input.Body.Name,
-			Type: "skill",
+			Type: auth.PermissionArtifactTypeSkill,
 		}
 
 		// Check if the skill already exists to decide the action
@@ -312,7 +327,7 @@ func RegisterSkillsPublishStatusEndpoints(api huma.API, pathPrefix string, regis
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: skillName,
-			Type: "skill",
+			Type: auth.PermissionArtifactTypeSkill,
 		}
 		if err := authz.Check(ctx, auth.PermissionActionPublish, resource); err != nil {
 			return nil, err
@@ -355,7 +370,7 @@ func RegisterSkillsPublishStatusEndpoints(api huma.API, pathPrefix string, regis
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: skillName,
-			Type: "skill",
+			Type: auth.PermissionArtifactTypeSkill,
 		}
 		if err := authz.Check(ctx, auth.PermissionActionPublish, resource); err != nil {
 			return nil, err

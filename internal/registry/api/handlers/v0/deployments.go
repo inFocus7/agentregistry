@@ -9,6 +9,7 @@ import (
 	"github.com/agentregistry-dev/agentregistry/internal/models"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/database"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/service"
+	"github.com/agentregistry-dev/agentregistry/pkg/registry/auth"
 	"github.com/danielgtaylor/huma/v2"
 )
 
@@ -50,7 +51,7 @@ type DeploymentsListInput struct {
 }
 
 // RegisterDeploymentsEndpoints registers all deployment-related endpoints
-func RegisterDeploymentsEndpoints(api huma.API, basePath string, registry service.RegistryService) {
+func RegisterDeploymentsEndpoints(api huma.API, basePath string, registry service.RegistryService, authz auth.Authorizer) {
 	// List all deployments
 	huma.Register(api, huma.Operation{
 		OperationID: "list-deployments",
@@ -60,6 +61,18 @@ func RegisterDeploymentsEndpoints(api huma.API, basePath string, registry servic
 		Description: "Retrieve all deployed resources (MCP servers, agents) with their configurations. Optionally filter by resource type.",
 		Tags:        []string{"deployments"},
 	}, func(ctx context.Context, input *DeploymentsListInput) (*DeploymentsListResponse, error) {
+		// TODO(infocus7): List should take account any extended DB access control setup, not a global read permission
+		// TODO: Should reading deployments be based on the individual artifact permissions? or a permission for the specific deployment?
+
+		// Enforce authorization
+		resource := auth.Resource{
+			Name: "*",
+			Type: auth.PermissionArtifactTypeDeployment,
+		}
+		if err := authz.Check(ctx, auth.PermissionActionRead, resource); err != nil {
+			return nil, err
+		}
+
 		deployments, err := registry.GetDeployments(ctx)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("Failed to retrieve deployments", err)
@@ -89,6 +102,19 @@ func RegisterDeploymentsEndpoints(api huma.API, basePath string, registry servic
 	}, func(ctx context.Context, input *struct {
 		DeploymentInput
 	}) (*DeploymentResponse, error) {
+		// TODO(infocus7): Should checking deployment permissions be based on the individual artifact permissions? or a permission for the specific deployment?
+		// In other words are Deployments their own "artifacts" with permissions?
+		// If the former, will need a way to get the artifact type. This deployment feels iffy, because servers + agents are in separate tables with unque (name, version), but they can still collide cross-table.
+
+		// Enforce authorization
+		resource := auth.Resource{
+			Name: input.ServerName,
+			Type: auth.PermissionArtifactTypeDeployment,
+		}
+		if err := authz.Check(ctx, auth.PermissionActionRead, resource); err != nil {
+			return nil, err
+		}
+
 		serverName, err := url.PathUnescape(input.ServerName)
 		if err != nil {
 			return nil, huma.Error400BadRequest("Invalid server name encoding", err)
@@ -122,24 +148,33 @@ func RegisterDeploymentsEndpoints(api huma.API, basePath string, registry servic
 		Body DeploymentRequest
 	}) (*DeploymentResponse, error) {
 		// Default to MCP server if resource type not specified
-		resourceType := input.Body.ResourceType
-		if resourceType == "" {
-			resourceType = "mcp"
+		var artifactType auth.PermissionArtifactType
+		switch input.Body.ResourceType {
+		case "", "mcp":
+			artifactType = auth.PermissionArtifactTypeServer
+		case "agent":
+			artifactType = auth.PermissionArtifactTypeAgent
+		default:
+			return nil, huma.Error400BadRequest("Invalid resource type. Must be 'mcp' or 'agent'")
 		}
 
-		// Validate resource type
-		if resourceType != "mcp" && resourceType != "agent" {
-			return nil, huma.Error400BadRequest("Invalid resource type. Must be 'mcp' or 'agent'")
+		// Enforce authorization
+		resource := auth.Resource{
+			Name: input.Body.ServerName,
+			Type: artifactType,
+		}
+		if err := authz.Check(ctx, auth.PermissionActionDeploy, resource); err != nil {
+			return nil, err
 		}
 
 		var deployment *models.Deployment
 		var err error
 
 		// Route to appropriate service method based on resource type
-		switch resourceType {
-		case "mcp":
+		switch artifactType {
+		case auth.PermissionArtifactTypeServer:
 			deployment, err = registry.DeployServer(ctx, input.Body.ServerName, input.Body.Version, input.Body.Config, input.Body.PreferRemote)
-		case "agent":
+		case auth.PermissionArtifactTypeAgent:
 			deployment, err = registry.DeployAgent(ctx, input.Body.ServerName, input.Body.Version, input.Body.Config, input.Body.PreferRemote)
 		}
 
@@ -177,6 +212,15 @@ func RegisterDeploymentsEndpoints(api huma.API, basePath string, registry servic
 			return nil, huma.Error400BadRequest("Invalid server name encoding", err)
 		}
 
+		// Enforce authorization
+		resource := auth.Resource{
+			Name: serverName,
+			Type: auth.PermissionArtifactTypeDeployment,
+		}
+		if err := authz.Check(ctx, auth.PermissionActionEdit, resource); err != nil {
+			return nil, err
+		}
+
 		version, err := url.PathUnescape(input.Version)
 		if err != nil {
 			return nil, huma.Error400BadRequest("Invalid version encoding", err)
@@ -205,6 +249,15 @@ func RegisterDeploymentsEndpoints(api huma.API, basePath string, registry servic
 		serverName, err := url.PathUnescape(input.ServerName)
 		if err != nil {
 			return nil, huma.Error400BadRequest("Invalid server name encoding", err)
+		}
+
+		// Enforce authorization
+		resource := auth.Resource{
+			Name: serverName,
+			Type: auth.PermissionArtifactTypeDeployment,
+		}
+		if err := authz.Check(ctx, auth.PermissionActionDelete, resource); err != nil {
+			return nil, err
 		}
 
 		version, err := url.PathUnescape(input.Version)

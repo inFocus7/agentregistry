@@ -14,7 +14,7 @@ var (
 
 type Resource struct {
 	Name string
-	Type string
+	Type PermissionArtifactType
 }
 
 type User struct {
