@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/agentregistry-dev/agentregistry/internal/models"
+	"github.com/agentregistry-dev/agentregistry/pkg/models"
 	internalv0 "github.com/agentregistry-dev/agentregistry/internal/registry/api/handlers/v0"
 	v0 "github.com/modelcontextprotocol/registry/pkg/api/v0"
 )

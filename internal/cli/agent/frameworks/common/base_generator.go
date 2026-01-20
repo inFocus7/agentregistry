@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
+
+	"github.com/agentregistry-dev/agentregistry/pkg/models"
 )
 
 // AgentConfig captures the data required to render an agent project from templates.
@@ -26,7 +28,7 @@ type AgentConfig struct {
 	Language      string
 	CLIVersion    string
 
-	McpServers []McpServerType
+	McpServers []models.McpServerType
 	EnvVars    []string
 	InitGit    bool
 }

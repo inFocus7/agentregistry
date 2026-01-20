@@ -61,3 +61,4 @@ type SkillListResponse struct {
 	Skills   []SkillResponse `json:"skills"`
 	Metadata SkillMetadata   `json:"metadata"`
 }
+

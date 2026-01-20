@@ -3,9 +3,9 @@ package utils
 import (
 	"fmt"
 
-	"github.com/agentregistry-dev/agentregistry/internal/cli/agent/frameworks/common"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/types"
 	"github.com/agentregistry-dev/agentregistry/internal/runtime/translation/registry/utils"
+	"github.com/agentregistry-dev/agentregistry/pkg/models"
 )
 
 // TranslateRegistryServer converts a registry ServerSpec into a common.McpServerType
@@ -15,7 +15,7 @@ func TranslateRegistryServer(
 	serverSpec *types.ServerSpec,
 	envOverrides map[string]string,
 	preferRemote bool,
-) (*common.McpServerType, error) {
+) (*models.McpServerType, error) {
 	if len(serverSpec.Remotes) == 0 && len(serverSpec.Packages) == 0 {
 		return nil, fmt.Errorf("server %q has no remotes or packages", serverSpec.Name)
 	}
@@ -32,7 +32,7 @@ func TranslateRegistryServer(
 			return nil, err
 		}
 
-		return &common.McpServerType{
+		return &models.McpServerType{
 			Type:    "remote",
 			Name:    name,
 			URL:     remote.URL,
@@ -62,7 +62,7 @@ func TranslateRegistryServer(
 		}
 		envVars := utils.EnvMapToStringSlice(envVarsMap)
 
-		return &common.McpServerType{
+		return &models.McpServerType{
 			Type:    "command",
 			Name:    name,
 			Image:   config.Image,

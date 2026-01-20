@@ -14,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	models "github.com/agentregistry-dev/agentregistry/internal/models"
+	"github.com/agentregistry-dev/agentregistry/pkg/models"
 	apiv0 "github.com/modelcontextprotocol/registry/pkg/api/v0"
 	"github.com/modelcontextprotocol/registry/pkg/model"
 )

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/agentregistry-dev/agentregistry/internal/models"
+	"github.com/agentregistry-dev/agentregistry/pkg/models"
 	"github.com/agentregistry-dev/agentregistry/internal/runtime/translation/api"
 	registryutils "github.com/agentregistry-dev/agentregistry/internal/runtime/translation/registry/utils"
 	"github.com/agentregistry-dev/agentregistry/internal/utils"

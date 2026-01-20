@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/agentregistry-dev/agentregistry/internal/cli/agent/frameworks/common"
 	"github.com/agentregistry-dev/agentregistry/internal/registry"
+	"github.com/agentregistry-dev/agentregistry/pkg/models"
 	"github.com/modelcontextprotocol/registry/pkg/model"
 )
 
 // ParseAgentManifestServers resolves registry-type MCP servers in an agent manifest, keeping non-registry servers as-is.
-func ParseAgentManifestServers(manifest *common.AgentManifest, verbose bool) ([]common.McpServerType, error) {
-	servers := []common.McpServerType{}
+func ParseAgentManifestServers(manifest *models.AgentManifest, verbose bool) ([]models.McpServerType, error) {
+	servers := []models.McpServerType{}
 
 	for _, mcpServer := range manifest.McpServers {
 		switch mcpServer.Type {
@@ -31,7 +31,7 @@ func ParseAgentManifestServers(manifest *common.AgentManifest, verbose bool) ([]
 }
 
 // resolveRegistryServer fetches a server from the registry and translates it to a runnable config
-func resolveRegistryServer(mcpServer common.McpServerType, verbose bool) (*common.McpServerType, error) {
+func resolveRegistryServer(mcpServer models.McpServerType, verbose bool) (*models.McpServerType, error) {
 	registryURL := mcpServer.RegistryURL
 	if registryURL == "" {
 		registryURL = "http://127.0.0.1:12121"

@@ -12,8 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/agentregistry-dev/agentregistry/internal/cli/agent/frameworks/common"
-	models "github.com/agentregistry-dev/agentregistry/internal/models"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/config"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/database"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/types"
@@ -21,6 +19,7 @@ import (
 	"github.com/agentregistry-dev/agentregistry/internal/runtime"
 	"github.com/agentregistry-dev/agentregistry/internal/runtime/translation/dockercompose"
 	"github.com/agentregistry-dev/agentregistry/internal/runtime/translation/registry"
+	"github.com/agentregistry-dev/agentregistry/pkg/models"
 	"github.com/jackc/pgx/v5"
 	apiv0 "github.com/modelcontextprotocol/registry/pkg/api/v0"
 	"github.com/modelcontextprotocol/registry/pkg/model"
@@ -850,7 +849,7 @@ func (s *registryServiceImpl) ReconcileAll(ctx context.Context) error {
 // This follows the same logic as the CLI-side resolveRegistryServer
 // TODO: Should we also be resolving the other types (i.e. command)? I didn't see my command server configured in the agent-gateway yaml, unsure if expected or a bug.
 // cat /tmp/arctl-runtime/agent-gateway.yaml only had an mcp route for the registry-resolved (since we added it to the run requests).
-func (s *registryServiceImpl) resolveAgentManifestMCPServers(ctx context.Context, manifest *common.AgentManifest) ([]*registry.MCPServerRunRequest, error) {
+func (s *registryServiceImpl) resolveAgentManifestMCPServers(ctx context.Context, manifest *models.AgentManifest) ([]*registry.MCPServerRunRequest, error) {
 	var resolvedServers []*registry.MCPServerRunRequest
 
 	for _, mcpServer := range manifest.McpServers {
