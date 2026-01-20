@@ -43,14 +43,19 @@ func TestNoneHandler_GetAnonymousToken(t *testing.T) {
 	assert.Equal(t, auth.MethodNone, claims.AuthMethod)
 	assert.Equal(t, "anonymous", claims.AuthMethodSubject)
 
-	// Check permissions - should have both publish and edit permissions
-	require.Len(t, claims.Permissions, 2)
+	// Check permissions - should have all permissions
+	require.Len(t, claims.Permissions, 8, "should have all permissions")
 
-	// Check publish permission
-	assert.Equal(t, auth.PermissionActionPublish, claims.Permissions[0].Action)
-	assert.Equal(t, "io.modelcontextprotocol.anonymous/*", claims.Permissions[0].ResourcePattern)
+	expectedPermissions := []auth.Permission{
+		{Action: auth.PermissionActionRead, ResourcePattern: "io.modelcontextprotocol.anonymous/*"},
+		{Action: auth.PermissionActionPull, ResourcePattern: "io.modelcontextprotocol.anonymous/*"},
+		{Action: auth.PermissionActionPush, ResourcePattern: "io.modelcontextprotocol.anonymous/*"},
+		{Action: auth.PermissionActionPublish, ResourcePattern: "io.modelcontextprotocol.anonymous/*"},
+		{Action: auth.PermissionActionEdit, ResourcePattern: "io.modelcontextprotocol.anonymous/*"},
+		{Action: auth.PermissionActionDelete, ResourcePattern: "io.modelcontextprotocol.anonymous/*"},
+		{Action: auth.PermissionActionDeploy, ResourcePattern: "io.modelcontextprotocol.anonymous/*"},
+		{Action: auth.PermissionActionRun, ResourcePattern: "io.modelcontextprotocol.anonymous/*"},
+	}
 
-	// Check edit permission
-	assert.Equal(t, auth.PermissionActionEdit, claims.Permissions[1].Action)
-	assert.Equal(t, "io.modelcontextprotocol.anonymous/*", claims.Permissions[1].ResourcePattern)
+	assert.Equal(t, expectedPermissions, claims.Permissions, "should have all permissions")
 }

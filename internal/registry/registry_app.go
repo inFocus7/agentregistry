@@ -50,7 +50,9 @@ func App(_ context.Context, opts ...types.AppOptions) error {
 		db, err = options.DatabaseFactory(ctx, cfg.DatabaseURL, baseDB)
 		if err != nil {
 			// Close base database on factory error
-			baseDB.Close()
+			if err := baseDB.Close(); err != nil {
+				log.Printf("Error closing base database connection: %v", err)
+			}
 			return fmt.Errorf("failed to create extended database: %w", err)
 		}
 	}
