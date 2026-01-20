@@ -4,15 +4,16 @@ import "time"
 
 // AgentManifest represents the agent project configuration and metadata.
 type AgentManifest struct {
-	Name          string          `yaml:"agentName" json:"name"`
-	Image         string          `yaml:"image" json:"image"`
-	Language      string          `yaml:"language" json:"language"`
-	Framework     string          `yaml:"framework" json:"framework"`
-	ModelProvider string          `yaml:"modelProvider" json:"modelProvider"`
-	ModelName     string          `yaml:"modelName" json:"modelName"`
-	Description   string          `yaml:"description" json:"description"`
-	McpServers    []McpServerType `yaml:"mcpServers,omitempty" json:"mcpServers,omitempty"`
-	UpdatedAt     time.Time       `yaml:"updatedAt,omitempty" json:"updatedAt,omitempty"`
+	Name              string          `yaml:"agentName" json:"name"`
+	Image             string          `yaml:"image" json:"image"`
+	Language          string          `yaml:"language" json:"language"`
+	Framework         string          `yaml:"framework" json:"framework"`
+	ModelProvider     string          `yaml:"modelProvider" json:"modelProvider"`
+	ModelName         string          `yaml:"modelName" json:"modelName"`
+	Description       string          `yaml:"description" json:"description"`
+	TelemetryEndpoint string          `yaml:"telemetryEndpoint,omitempty" json:"telemetryEndpoint,omitempty"`
+	McpServers        []McpServerType `yaml:"mcpServers,omitempty" json:"mcpServers,omitempty"`
+	UpdatedAt         time.Time       `yaml:"updatedAt,omitempty" json:"updatedAt,omitempty"`
 }
 
 // McpServerType represents a single MCP server configuration.
@@ -33,4 +34,3 @@ type McpServerType struct {
 	RegistryServerVersion      string `yaml:"registryServerVersion,omitempty" json:"registryServerVersion,omitempty"`
 	RegistryServerPreferRemote bool   `yaml:"registryServerPreferRemote,omitempty" json:"registryServerPreferRemote,omitempty"`
 }
-
