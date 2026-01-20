@@ -41,7 +41,8 @@ func TestEditServerEndpoint(t *testing.T) {
 
 	// Create authorizer
 	jwtManager := auth.NewJWTManager(cfg)
-	authz := auth.Authorizer{Authz: jwtManager}
+	authzProvider := auth.NewPublicAuthzProvider(jwtManager)
+	authz := auth.Authorizer{Authz: authzProvider}
 
 	// Create test servers for different scenarios
 	testServers := map[string]*apiv0.ServerJSON{
@@ -449,7 +450,9 @@ func TestEditServerEndpointEdgeCases(t *testing.T) {
 	registryService := service.NewRegistryService(database.NewTestDB(t), cfg)
 
 	// Create authorizer
-	authz := auth.Authorizer{Authz: nil}
+	jwtManager := auth.NewJWTManager(cfg)
+	authzProvider := auth.NewPublicAuthzProvider(jwtManager)
+	authz := auth.Authorizer{Authz: authzProvider}
 
 	// Setup test servers with different characteristics
 	testServers := []struct {

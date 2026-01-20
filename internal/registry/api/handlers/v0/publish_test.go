@@ -201,8 +201,8 @@ func TestPublishEndpoint(t *testing.T) {
 				}
 				_, _ = registry.CreateServer(context.Background(), &existingServer)
 			},
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "invalid version: cannot publish duplicate version",
+			expectedStatus: http.StatusUnauthorized,
+			expectedError:  "Unauthorized",
 		},
 		{
 			name: "package validation success - MCPB package",
@@ -381,7 +381,9 @@ func TestPublishEndpoint(t *testing.T) {
 			api := humago.New(mux, huma.DefaultConfig("Test API", "1.0.0"))
 
 			// Register the endpoint with test config
-			authz := auth.Authorizer{Authz: nil}
+			jwtManager := auth.NewJWTManager(testConfig)
+			authzProvider := auth.NewPublicAuthzProvider(jwtManager)
+			authz := auth.Authorizer{Authz: authzProvider}
 			v0.RegisterCreateEndpoint(api, "/v0", registryService, authz)
 
 			// Prepare request body
@@ -481,7 +483,9 @@ func TestPublishEndpoint_MultipleSlashesEdgeCases(t *testing.T) {
 			api := humago.New(mux, huma.DefaultConfig("Test API", "1.0.0"))
 
 			// Register the endpoint
-			authz := auth.Authorizer{Authz: nil}
+			jwtManager := auth.NewJWTManager(testConfig)
+			authzProvider := auth.NewPublicAuthzProvider(jwtManager)
+			authz := auth.Authorizer{Authz: authzProvider}
 			v0.RegisterCreateEndpoint(api, "/v0", registryService, authz)
 
 			// Create request body

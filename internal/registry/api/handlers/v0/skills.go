@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	skillmodels "github.com/agentregistry-dev/agentregistry/pkg/models"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/database"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/service"
+	skillmodels "github.com/agentregistry-dev/agentregistry/pkg/models"
 	"github.com/agentregistry-dev/agentregistry/pkg/registry/auth"
 	"github.com/danielgtaylor/huma/v2"
 )
@@ -229,16 +229,14 @@ func RegisterSkillsCreateEndpoint(api huma.API, pathPrefix string, registry serv
 			Type: auth.PermissionArtifactTypeSkill,
 		}
 
-		// Check if the skill already exists to decide the action
-		existingSkill, err := registry.GetSkillByName(ctx, input.Body.Name)
+		action := auth.PermissionActionPush
+		// Check if the skill already exists to set the appropriate action (edit if existing)
+		existingSkill, err := registry.GetSkillByNameAndVersion(ctx, input.Body.Name, input.Body.Version)
 		if err != nil && err != database.ErrNotFound {
 			return nil, huma.Error500InternalServerError("Failed to check if skill exists", err)
 		}
-		var action auth.PermissionAction
 		if existingSkill != nil {
 			action = auth.PermissionActionEdit
-		} else {
-			action = auth.PermissionActionPush
 		}
 
 		if err := authz.Check(ctx, action, resource); err != nil {
@@ -266,17 +264,14 @@ func RegisterAdminSkillsCreateEndpoint(api huma.API, pathPrefix string, registry
 			Type: auth.PermissionArtifactTypeSkill,
 		}
 
-		// Check if the skill already exists to decide the action
-		existingSkill, err := registry.GetSkillByName(ctx, input.Body.Name)
+		action := auth.PermissionActionPush
+		// Check if the skill already exists to set the appropriate action (edit if existing)
+		existingSkill, err := registry.GetSkillByNameAndVersion(ctx, input.Body.Name, input.Body.Version)
 		if err != nil && err != database.ErrNotFound {
 			return nil, huma.Error500InternalServerError("Failed to check if skill exists", err)
 		}
-
-		var action auth.PermissionAction
 		if existingSkill != nil {
 			action = auth.PermissionActionEdit
-		} else {
-			action = auth.PermissionActionPush
 		}
 
 		if err := authz.Check(ctx, action, resource); err != nil {

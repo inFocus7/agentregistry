@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	agentmodels "github.com/agentregistry-dev/agentregistry/pkg/models"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/database"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/service"
+	agentmodels "github.com/agentregistry-dev/agentregistry/pkg/models"
 	"github.com/agentregistry-dev/agentregistry/pkg/registry/auth"
 	"github.com/danielgtaylor/huma/v2"
 )
@@ -262,22 +262,20 @@ func RegisterAgentsCreateEndpoint(api huma.API, pathPrefix string, registry serv
 		Tags:        []string{"agents", "publish"},
 		Security:    []map[string][]string{{"bearer": {}}},
 	}, func(ctx context.Context, input *CreateAgentInput) (*Response[agentmodels.AgentResponse], error) {
+		action := auth.PermissionActionPush
+		// Check if the agent already exists to set the appropriate action (edit if existing)
+		existingAgent, err := registry.GetAgentByNameAndVersion(ctx, input.Body.Name, input.Body.Version)
+		if err != nil && err != database.ErrNotFound {
+			return nil, huma.Error500InternalServerError("Failed to check if agent exists", err)
+		}
+		if existingAgent != nil {
+			action = auth.PermissionActionEdit
+		}
+
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: input.Body.Name,
 			Type: auth.PermissionArtifactTypeAgent,
-		}
-
-		// check if the agent already exists to decide the action
-		existingAgent, err := registry.GetAgentByName(ctx, input.Body.Name)
-		if err != nil && err != database.ErrNotFound {
-			return nil, huma.Error500InternalServerError("Failed to check if agent exists", err)
-		}
-		var action auth.PermissionAction
-		if existingAgent != nil {
-			action = auth.PermissionActionEdit
-		} else {
-			action = auth.PermissionActionPush
 		}
 
 		if err := authz.Check(ctx, action, resource); err != nil {
@@ -327,17 +325,17 @@ func RegisterAdminAgentsCreateEndpoint(api huma.API, pathPrefix string, registry
 			Type: auth.PermissionArtifactTypeAgent,
 		}
 
-		// check if the agent already exists to decide the action
-		existingAgent, err := registry.GetAgentByName(ctx, input.Body.Name)
+		action := auth.PermissionActionPush
+		// Check if the agent already exists to set the appropriate action (edit if existing)
+		existingAgent, err := registry.GetAgentByNameAndVersion(ctx, input.Body.Name, input.Body.Version)
 		if err != nil && err != database.ErrNotFound {
 			return nil, huma.Error500InternalServerError("Failed to check if agent exists", err)
 		}
-		var action auth.PermissionAction
 		if existingAgent != nil {
 			action = auth.PermissionActionEdit
-		} else {
-			action = auth.PermissionActionPush
 		}
+
+		// Enforce authorization
 		if err := authz.Check(ctx, action, resource); err != nil {
 			return nil, err
 		}

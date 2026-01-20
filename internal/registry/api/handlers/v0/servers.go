@@ -506,16 +506,14 @@ func RegisterCreateEndpoint(api huma.API, pathPrefix string, registry service.Re
 			Type: auth.PermissionArtifactTypeServer,
 		}
 
-		// check if the server already exists to decide the action
-		existingServer, err := registry.GetServerByName(ctx, input.Body.Name)
+		action := auth.PermissionActionPush
+		// Check if the server already exists to decide the action
+		existingServer, err := registry.GetServerByNameAndVersion(ctx, input.Body.Name, input.Body.Version, false)
 		if err != nil && err != database.ErrNotFound {
 			return nil, huma.Error500InternalServerError("Failed to check if server exists", err)
 		}
-		var action auth.PermissionAction
 		if existingServer != nil {
 			action = auth.PermissionActionEdit
-		} else {
-			action = auth.PermissionActionPush
 		}
 
 		if err := authz.Check(ctx, action, resource); err != nil {
@@ -543,16 +541,14 @@ func RegisterAdminCreateEndpoint(api huma.API, pathPrefix string, registry servi
 			Type: auth.PermissionArtifactTypeServer,
 		}
 
-		// check if the server already exists to decide the action
-		existingServer, err := registry.GetServerByName(ctx, input.Body.Name)
+		action := auth.PermissionActionPush
+		// Check if the server already exists to set the appropriate action (edit if existing)
+		existingServer, err := registry.GetServerByNameAndVersion(ctx, input.Body.Name, input.Body.Version, false)
 		if err != nil && err != database.ErrNotFound {
 			return nil, huma.Error500InternalServerError("Failed to check if server exists", err)
 		}
-		var action auth.PermissionAction
 		if existingServer != nil {
 			action = auth.PermissionActionEdit
-		} else {
-			action = auth.PermissionActionPush
 		}
 
 		if err := authz.Check(ctx, action, resource); err != nil {

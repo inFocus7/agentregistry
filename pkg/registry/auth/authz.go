@@ -34,9 +34,9 @@ var PublicActions = map[PermissionAction]bool{
 	// Once we implement better authN/authZ handling, we'll want to remove these, and just have read-only (above) actions as "public".
 	PermissionActionPush:    true,
 	PermissionActionPublish: true,
-	PermissionActionEdit:    true,
-	PermissionActionDelete:  true,
-	PermissionActionDeploy:  true,
+	// PermissionActionEdit:    true,
+	PermissionActionDelete: true,
+	PermissionActionDeploy: true,
 }
 
 // PublicAuthzProvider implements AuthzProvider for the public version.

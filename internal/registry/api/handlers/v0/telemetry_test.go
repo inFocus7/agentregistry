@@ -2,6 +2,9 @@ package v0_test
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -10,6 +13,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	v0 "github.com/agentregistry-dev/agentregistry/internal/registry/api/handlers/v0"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/api/router"
@@ -23,7 +27,15 @@ import (
 )
 
 func TestPrometheusHandler(t *testing.T) {
-	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig())
+	testSeed := make([]byte, ed25519.SeedSize)
+	_, err := rand.Read(testSeed)
+	require.NoError(t, err)
+	testConfig := &config.Config{
+		JWTPrivateKey:            hex.EncodeToString(testSeed),
+		EnableRegistryValidation: false, // Disable for unit tests
+	}
+
+	registryService := service.NewRegistryService(database.NewTestDB(t), testConfig)
 	server, err := registryService.CreateServer(context.Background(), &apiv0.ServerJSON{
 		Schema:      model.CurrentSchemaURL,
 		Name:        "io.github.example/test-server",
@@ -40,13 +52,15 @@ func TestPrometheusHandler(t *testing.T) {
 	err = registryService.PublishServer(context.Background(), server.Server.Name, server.Server.Version)
 	assert.NoError(t, err)
 
-	cfg := config.NewConfig()
+	cfg := testConfig
 	shutdownTelemetry, metrics, _ := telemetry.InitMetrics("dev")
 
 	mux := http.NewServeMux()
 	api := humago.New(mux, huma.DefaultConfig("Test API", "1.0.0"))
 	// Create authorizer
-	authz := auth.Authorizer{Authz: nil}
+	jwtManager := auth.NewJWTManager(testConfig)
+	authzProvider := auth.NewPublicAuthzProvider(jwtManager)
+	authz := auth.Authorizer{Authz: authzProvider}
 	// Add metrics middleware with options
 	api.UseMiddleware(router.MetricTelemetryMiddleware(metrics,
 		router.WithSkipPaths("/health", "/metrics", "/ping", "/docs"),
