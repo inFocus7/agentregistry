@@ -25,18 +25,22 @@ func (a *Authorizer) Check(ctx context.Context, verb PermissionAction, resource 
 	return a.Authz.Check(ctx, s, verb, resource)
 }
 
-// PublicActions defines which actions are allowed without authentication.
+// PublicActions defines which actions are allowed without authentication (non-destructive actions).
 var PublicActions = map[PermissionAction]bool{
 	PermissionActionRead: true,
 	PermissionActionPull: true,
 	PermissionActionRun:  true, // local runs
+	// NOTE: In the meantime, we'll allow all actions to be performed locally without authentication.
+	// Once we implement better authN/authZ handling, we'll want to remove these, and just have read-only (above) actions as "public".
+	PermissionActionPush:    true,
+	PermissionActionPublish: true,
+	PermissionActionEdit:    true,
+	PermissionActionDelete:  true,
+	PermissionActionDeploy:  true,
 }
 
 // PublicAuthzProvider implements AuthzProvider for the public version.
-// It allows public read/pull/run operations without authentication,
-// while requiring authentication and proper permissions for write operations.
 type PublicAuthzProvider struct {
-	// jwtManager handles permission checking for authenticated users
 	jwtManager *JWTManager
 }
 
