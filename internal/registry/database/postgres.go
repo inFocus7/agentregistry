@@ -231,8 +231,6 @@ func (db *PostgreSQL) ListServers(
 	return results, nextCursor, nil
 }
 
-// Eitan: pass authz as part of db interface to use?
-
 // GetServerByName retrieves the latest version of a server by server name
 func (db *PostgreSQL) GetServerByName(ctx context.Context, tx pgx.Tx, serverName string) (*apiv0.ServerResponse, error) {
 	if ctx.Err() != nil {

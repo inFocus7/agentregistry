@@ -37,23 +37,17 @@ func App(_ context.Context, opts ...types.AppOptions) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// [apply all oss], [apply all ext]
-	// [> 499]
-
 	// Connect to PostgreSQL (runs OSS migrations)
 	baseDB, err := internaldb.NewPostgreSQL(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("failed to connect to PostgreSQL: %w", err)
 	}
 
-	// Allow implementors to wrap the database (runs additional migrations)
-	// Important: This assumes the extension's migrations are purely additive, in which the ordering between OSS + extension migrations would not matter.
-	// To allow for more complex migrations, we'll need a different migration strategy (e.g., timestamped migrations, dependency tracking in extension migrations)
+	// Allow implementors to wrap the database, and run additional migrations
 	var db database.Database = baseDB
 	if options.DatabaseFactory != nil {
 		db, err = options.DatabaseFactory(ctx, cfg.DatabaseURL, baseDB)
 		if err != nil {
-			// Close base database on factory error
 			if err := baseDB.Close(); err != nil {
 				log.Printf("Error closing base database connection: %v", err)
 			}

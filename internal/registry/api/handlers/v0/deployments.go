@@ -41,8 +41,9 @@ type DeploymentsListResponse struct {
 
 // DeploymentInput represents path parameters for deployment operations
 type DeploymentInput struct {
-	ServerName string `path:"serverName" doc:"URL-encoded server name" example:"io.github.user%2Fweather"`
-	Version    string `path:"version" doc:"Version of the deployment to get" example:"1.0.0"`
+	ServerName   string `path:"serverName" doc:"URL-encoded server name" example:"io.github.user%2Fweather"`
+	Version      string `path:"version" doc:"Version of the deployment to get" example:"1.0.0"`
+	ResourceType string `path:"resourceType" doc:"Resource type (mcp, agent)" example:"mcp" enum:"mcp,agent"`
 }
 
 // DeploymentsListInput represents query parameters for listing deployments
@@ -92,14 +93,18 @@ func RegisterDeploymentsEndpoints(api huma.API, basePath string, registry servic
 	}, func(ctx context.Context, input *struct {
 		DeploymentInput
 	}) (*DeploymentResponse, error) {
-		// TODO(infocus7): Should checking deployment permissions be based on the individual artifact permissions? or a permission for the specific deployment?
-		// In other words are Deployments their own "artifacts" with permissions?
-		// If the former, will need a way to get the artifact type. This deployment feels iffy, because servers + agents are in separate tables with unque (name, version), but they can still collide cross-table.
-
-		// Enforce authorization
+		var artifactType auth.PermissionArtifactType
+		switch input.ResourceType {
+		case "", "mcp":
+			artifactType = auth.PermissionArtifactTypeServer
+		case "agent":
+			artifactType = auth.PermissionArtifactTypeAgent
+		default:
+			return nil, huma.Error400BadRequest("Invalid resource type. Must be 'mcp' or 'agent'")
+		}
 		resource := auth.Resource{
 			Name: input.ServerName,
-			Type: auth.PermissionArtifactTypeDeployment,
+			Type: artifactType,
 		}
 		if err := authz.Check(ctx, auth.PermissionActionRead, resource); err != nil {
 			return nil, err
@@ -137,7 +142,6 @@ func RegisterDeploymentsEndpoints(api huma.API, basePath string, registry servic
 	}, func(ctx context.Context, input *struct {
 		Body DeploymentRequest
 	}) (*DeploymentResponse, error) {
-		// Default to MCP server if resource type not specified
 		var artifactType auth.PermissionArtifactType
 		switch input.Body.ResourceType {
 		case "", "mcp":
@@ -202,10 +206,20 @@ func RegisterDeploymentsEndpoints(api huma.API, basePath string, registry servic
 			return nil, huma.Error400BadRequest("Invalid server name encoding", err)
 		}
 
+		var artifactType auth.PermissionArtifactType
+		switch input.ResourceType {
+		case "", "mcp":
+			artifactType = auth.PermissionArtifactTypeServer
+		case "agent":
+			artifactType = auth.PermissionArtifactTypeAgent
+		default:
+			return nil, huma.Error400BadRequest("Invalid resource type. Must be 'mcp' or 'agent'")
+		}
+
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: serverName,
-			Type: auth.PermissionArtifactTypeDeployment,
+			Type: artifactType,
 		}
 		if err := authz.Check(ctx, auth.PermissionActionEdit, resource); err != nil {
 			return nil, err
@@ -227,7 +241,7 @@ func RegisterDeploymentsEndpoints(api huma.API, basePath string, registry servic
 		return &DeploymentResponse{Body: *deployment}, nil
 	})
 
-	// Remove a deployed server
+	// Remove a deployed server (undeploy)
 	huma.Register(api, huma.Operation{
 		OperationID: "remove-server",
 		Method:      http.MethodDelete,
@@ -241,12 +255,22 @@ func RegisterDeploymentsEndpoints(api huma.API, basePath string, registry servic
 			return nil, huma.Error400BadRequest("Invalid server name encoding", err)
 		}
 
+		var artifactType auth.PermissionArtifactType
+		switch input.ResourceType {
+		case "", "mcp":
+			artifactType = auth.PermissionArtifactTypeServer
+		case "agent":
+			artifactType = auth.PermissionArtifactTypeAgent
+		default:
+			return nil, huma.Error400BadRequest("Invalid resource type. Must be 'mcp' or 'agent'")
+		}
+
 		// Enforce authorization
 		resource := auth.Resource{
 			Name: serverName,
-			Type: auth.PermissionArtifactTypeDeployment,
+			Type: artifactType,
 		}
-		if err := authz.Check(ctx, auth.PermissionActionDelete, resource); err != nil {
+		if err := authz.Check(ctx, auth.PermissionActionDeploy, resource); err != nil {
 			return nil, err
 		}
 

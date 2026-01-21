@@ -97,7 +97,7 @@ func isAgentDeployed(agentName, version string) (bool, error) {
 		return false, fmt.Errorf("API client not initialized")
 	}
 
-	deployment, err := apiClient.GetDeployedServerByNameAndVersion(agentName, version)
+	deployment, err := apiClient.GetDeployedServerByNameAndVersion(agentName, version, "agent")
 	if err != nil {
 		return false, fmt.Errorf("failed to get deployment: %w", err)
 	}
