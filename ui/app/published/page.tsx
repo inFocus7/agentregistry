@@ -107,13 +107,13 @@ export default function PublishedPage() {
   }, [])
 
   // Check if a resource is currently deployed (check both name and version)
-  const isDeployed = (name: string, version: string) => {
-    return deployments.some(d => d.serverName === name && d.version === version)
+  const isDeployed = (name: string, version: string, type: 'server' | 'agent') => {
+    return deployments.some(d => d.serverName === name && d.version === version && d.resourceType === (type === 'server' ? 'mcp' : 'agent'))
   }
 
   const handleUnpublish = async (name: string, version: string, type: 'server' | 'skill' | 'agent') => {
     // Check if the resource is deployed (check specific version)
-    if (type !== 'skill' && isDeployed(name, version)) {
+    if (type !== 'skill' && isDeployed(name, version, type)) {
       toast.error(`Cannot unpublish ${name} version ${version} while it's deployed. Remove it from the Deployed page first.`)
       return
     }
@@ -342,7 +342,7 @@ export default function PublishedPage() {
                   {servers.map((serverResponse) => {
                     const server = serverResponse.server
                     const meta = serverResponse._meta?.['io.modelcontextprotocol.registry/official']
-                    const deployed = isDeployed(server.name, server.version)
+                    const deployed = isDeployed(server.name, server.version, 'server')
                     return (
                       <Card key={`${server.name}-${server.version}`} className="p-6 hover:shadow-md transition-all duration-200">
                         <div className="flex items-start justify-between">
@@ -448,6 +448,7 @@ export default function PublishedPage() {
                   {agents.map((agentResponse) => {
                     const agent = agentResponse.agent
                     const meta = agentResponse._meta?.['io.modelcontextprotocol.registry/official']
+                    const deployed = isDeployed(agent.name, agent.version, 'agent')
                     return (
                       <Card key={`${agent.name}-${agent.version}`} className="p-6 hover:shadow-md transition-all duration-200">
                         <div className="flex items-start justify-between">
@@ -477,16 +478,16 @@ export default function PublishedPage() {
                               variant="default"
                               size="sm"
                               onClick={() => handleDeploy(agent.name, agent.version, 'agent')}
-                              disabled={deploying}
+                              disabled={deploying || deployed}
                             >
                               <Rocket className="h-4 w-4 mr-2" />
-                              Deploy
+                              {deployed ? 'Already Deployed' : 'Deploy'}
                             </Button>
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => handleUnpublish(agent.name, agent.version, 'agent')}
-                              disabled={unpublishing}
+                              disabled={unpublishing || deployed}
                             >
                               Unpublish
                             </Button>
