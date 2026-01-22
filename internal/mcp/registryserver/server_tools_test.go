@@ -9,10 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/agentregistry-dev/agentregistry/internal/cli/agent/frameworks/common"
-	"github.com/agentregistry-dev/agentregistry/internal/models"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/config"
-	"github.com/agentregistry-dev/agentregistry/internal/registry/database"
+	"github.com/agentregistry-dev/agentregistry/pkg/models"
+	"github.com/agentregistry-dev/agentregistry/pkg/registry/database"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	apiv0 "github.com/modelcontextprotocol/registry/pkg/api/v0"
 	"github.com/modelcontextprotocol/registry/pkg/model"
@@ -245,7 +244,7 @@ func TestAgentAndSkillTools_ListAndGet(t *testing.T) {
 		agents: []*models.AgentResponse{
 			{
 				Agent: models.AgentJSON{
-					AgentManifest: common.AgentManifest{
+					AgentManifest: models.AgentManifest{
 						Name:      "com.example/agent",
 						Language:  "go",
 						Framework: "none",
