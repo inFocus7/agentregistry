@@ -12,17 +12,19 @@ import (
 	"github.com/agentregistry-dev/agentregistry/internal/registry/auth"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/database"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/service"
+	"github.com/agentregistry-dev/agentregistry/internal/registry/telemetry"
 	"github.com/danielgtaylor/huma/v2"
+	"go.uber.org/zap"
 )
 
 // ListAgentsInput represents the input for listing agents
 type ListAgentsInput struct {
-	Cursor       string `query:"cursor" doc:"Pagination cursor" required:"false" example:"agent-cursor-123"`
-	Limit        int    `query:"limit" doc:"Number of items per page" default:"30" minimum:"1" maximum:"100" example:"50"`
-	UpdatedSince string `query:"updated_since" doc:"Filter agents updated since timestamp (RFC3339 datetime)" required:"false" example:"2025-08-07T13:15:04.280Z"`
-	Search       string `query:"search" doc:"Search agents by name (substring match)" required:"false" example:"filesystem"`
-	Version      string `query:"version" doc:"Filter by version ('latest' for latest version, or an exact version like '1.2.3')" required:"false" example:"latest"`
-	Semantic     bool   `query:"semantic_search" doc:"Use semantic search for the search term"` 
+	Cursor                 string  `query:"cursor" doc:"Pagination cursor" required:"false" example:"agent-cursor-123"`
+	Limit                  int     `query:"limit" doc:"Number of items per page" default:"30" minimum:"1" maximum:"100" example:"50"`
+	UpdatedSince           string  `query:"updated_since" doc:"Filter agents updated since timestamp (RFC3339 datetime)" required:"false" example:"2025-08-07T13:15:04.280Z"`
+	Search                 string  `query:"search" doc:"Search agents by name (substring match)" required:"false" example:"filesystem"`
+	Version                string  `query:"version" doc:"Filter by version ('latest' for latest version, or an exact version like '1.2.3')" required:"false" example:"latest"`
+	Semantic               bool    `query:"semantic_search" doc:"Use semantic search for the search term"`
 	SemanticMatchThreshold float64 `query:"semantic_threshold" doc:"Optional maximum cosine distance when semantic_search is enabled" required:"false"`
 }
 
@@ -60,6 +62,18 @@ func RegisterAgentsEndpoints(api huma.API, pathPrefix string, registry service.R
 		Description: "Get a paginated list of Agentic agents from the registry",
 		Tags:        tags,
 	}, func(ctx context.Context, input *ListAgentsInput) (*Response[agentmodels.AgentListResponse], error) {
+		// todo: make this into a middleware? the main issue will be on how to do appropiate final log.Warn/Err/Info/Debug,
+		// since the middleware (correctly) encapsulates the start + end, but the final type of log is decided here in the business logic, so it would need to be propagated back to the middleware.
+		logger := telemetry.NewLogger("api_handler")
+		logger = logger.With(
+			zap.String("path", pathPrefix+"/agents"),
+			zap.String("method", http.MethodGet),
+			// todo: log auth details (e.g. user id) - possibly up to authN/Z providers to handle adding from context?
+			// todo: create/get request id
+			// todo: add details (e.g. user agent, ip address, etc.)? at least user-agent in case automation gets defined and it'll be easy to find by user-agent.
+			zap.Any("request_input", input),
+		)
+
 		// Build filter
 		filter := &database.AgentFilter{}
 
@@ -73,6 +87,7 @@ func RegisterAgentsEndpoints(api huma.API, pathPrefix string, registry service.R
 			if updatedTime, err := time.Parse(time.RFC3339, input.UpdatedSince); err == nil {
 				filter.UpdatedSince = &updatedTime
 			} else {
+				logger.Error("Invalid updated_since format", zap.Int("status_code", http.StatusBadRequest), zap.Error(err))
 				return nil, huma.Error400BadRequest("Invalid updated_since format: expected RFC3339 timestamp (e.g., 2025-08-07T13:15:04.280Z)")
 			}
 		}
@@ -98,11 +113,16 @@ func RegisterAgentsEndpoints(api huma.API, pathPrefix string, registry service.R
 			}
 		}
 
+		logger = logger.With(zap.Any("filter", filter))
+
+		// todo: track latency to listAgents call
 		agents, nextCursor, err := registry.ListAgents(ctx, filter, input.Cursor, input.Limit)
 		if err != nil {
 			if errors.Is(err, database.ErrInvalidInput) {
+				logger.Error("Invalid input", zap.Int("status_code", http.StatusBadRequest), zap.Error(err))
 				return nil, huma.Error400BadRequest(err.Error(), err)
 			}
+			logger.Error("Failed to get agents list", zap.Int("status_code", http.StatusInternalServerError), zap.Error(err))
 			return nil, huma.Error500InternalServerError("Failed to get agents list", err)
 		}
 
@@ -110,6 +130,7 @@ func RegisterAgentsEndpoints(api huma.API, pathPrefix string, registry service.R
 		for i, a := range agents {
 			agentValues[i] = *a
 		}
+		logger.Info("Agents list retrieved", zap.Int("status_code", http.StatusOK), zap.Int("count", len(agents)))
 		return &Response[agentmodels.AgentListResponse]{
 			Body: agentmodels.AgentListResponse{
 				Agents: agentValues,

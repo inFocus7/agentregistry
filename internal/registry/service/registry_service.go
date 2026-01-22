@@ -17,6 +17,7 @@ import (
 	"github.com/agentregistry-dev/agentregistry/internal/registry/config"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/database"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/embeddings"
+	"github.com/agentregistry-dev/agentregistry/internal/registry/telemetry"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/types"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/validators"
 	"github.com/agentregistry-dev/agentregistry/internal/runtime"
@@ -25,6 +26,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	apiv0 "github.com/modelcontextprotocol/registry/pkg/api/v0"
 	"github.com/modelcontextprotocol/registry/pkg/model"
+	"go.uber.org/zap"
 )
 
 const maxServerVersionsPerServer = 10000
@@ -500,18 +502,31 @@ func (s *registryServiceImpl) validateUpdateRequest(ctx context.Context, req api
 
 // ListAgents returns registry entries for agents with pagination and filtering
 func (s *registryServiceImpl) ListAgents(ctx context.Context, filter *database.AgentFilter, cursor string, limit int) ([]*models.AgentResponse, string, error) {
+	logger := telemetry.NewLogger("registry_service")
+	// todo: should use request_logger
+	logger = logger.With(
+		zap.String("method", "ListAgents"),
+		zap.String("cursor", cursor),
+		zap.Int("limit", limit),
+		zap.Any("filter", filter),
+	)
+
 	if limit <= 0 {
 		limit = 30
 	}
 	if filter != nil {
 		if err := s.ensureSemanticEmbedding(ctx, filter.Semantic); err != nil {
+			logger.Error("Error ensuring semantic embedding", zap.Error(err))
 			return nil, "", err
 		}
 	}
+	// todo: track latency to listAgents call
 	agents, next, err := s.db.ListAgents(ctx, nil, filter, cursor, limit)
 	if err != nil {
+		logger.Error("Failed to list agents", zap.Error(err))
 		return nil, "", err
 	}
+	logger.Info("Agents list retrieved", zap.Int("count", len(agents)))
 	return agents, next, nil
 }
 

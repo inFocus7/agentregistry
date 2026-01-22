@@ -17,6 +17,7 @@ require (
 	github.com/kagent-dev/kagent/go v0.0.0-20251107200645-686008ea62ac
 	github.com/modelcontextprotocol/registry v1.3.7
 	github.com/muesli/reflow v0.3.0
+	github.com/oklog/ulid/v2 v2.1.1
 	github.com/ossf/scorecard/v4 v4.13.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/rs/cors v1.11.1
@@ -30,6 +31,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.38.0
 	go.opentelemetry.io/otel/sdk v1.38.0
 	go.opentelemetry.io/otel/sdk/metric v1.38.0
+	go.uber.org/zap v1.27.0
 	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/mod v0.29.0
 	golang.org/x/text v0.29.0
@@ -212,7 +214,6 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.63.0 // indirect
 	go.opentelemetry.io/otel/trace v1.38.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	gocloud.dev v0.34.0 // indirect
 	golang.org/x/crypto v0.42.0 // indirect

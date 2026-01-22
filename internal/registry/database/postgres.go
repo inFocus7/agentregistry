@@ -14,8 +14,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 
 	models "github.com/agentregistry-dev/agentregistry/internal/models"
+	"github.com/agentregistry-dev/agentregistry/internal/registry/telemetry"
 	apiv0 "github.com/modelcontextprotocol/registry/pkg/api/v0"
 	"github.com/modelcontextprotocol/registry/pkg/model"
 )
@@ -1107,10 +1109,19 @@ func scanServerReadme(row pgx.Row) (*ServerReadme, error) {
 
 // ListAgents returns paginated agents with filtering
 func (db *PostgreSQL) ListAgents(ctx context.Context, tx pgx.Tx, filter *AgentFilter, cursor string, limit int) ([]*models.AgentResponse, string, error) {
+	logger := telemetry.NewLogger("postgres_database")
+	logger = logger.With(
+		zap.String("method", "ListAgents"),
+		zap.String("cursor", cursor),
+		zap.Int("limit", limit),
+		zap.Any("filter", filter),
+	)
+
 	if limit <= 0 {
 		limit = 10
 	}
 	if ctx.Err() != nil {
+		logger.Error("Context error", zap.Error(ctx.Err()))
 		return nil, "", ctx.Err()
 	}
 
@@ -1120,9 +1131,11 @@ func (db *PostgreSQL) ListAgents(ctx context.Context, tx pgx.Tx, filter *AgentFi
 		var err error
 		semanticLiteral, err = vectorLiteral(filter.Semantic.QueryEmbedding)
 		if err != nil {
+			logger.Error("Invalid semantic embedding", zap.Error(err))
 			return nil, "", fmt.Errorf("invalid semantic embedding: %w", err)
 		}
 	}
+	logger = logger.With(zap.String("semantic_literal", semanticLiteral))
 
 	var whereConditions []string
 	args := []any{}
@@ -1223,8 +1236,10 @@ func (db *PostgreSQL) ListAgents(ctx context.Context, tx pgx.Tx, filter *AgentFi
 	`, selectClause, whereClause, orderClause, argIndex)
 	args = append(args, limit)
 
+	// todo: should we track query duration? or entire call duration?
 	rows, err := db.getExecutor(tx).Query(ctx, query, args...)
 	if err != nil {
+		logger.Error("Failed to query agents", zap.Error(err))
 		return nil, "", fmt.Errorf("failed to query agents: %w", err)
 	}
 	defer rows.Close()
@@ -1245,11 +1260,13 @@ func (db *PostgreSQL) ListAgents(ctx context.Context, tx pgx.Tx, filter *AgentFi
 		}
 
 		if scanErr != nil {
+			logger.Error("Failed to scan agent row", zap.Error(scanErr))
 			return nil, "", fmt.Errorf("failed to scan agent row: %w", err)
 		}
 
 		var agentJSON models.AgentJSON
 		if err := json.Unmarshal(valueJSON, &agentJSON); err != nil {
+			logger.Error("Failed to unmarshal agent JSON", zap.Error(err))
 			return nil, "", fmt.Errorf("failed to unmarshal agent JSON: %w", err)
 		}
 
@@ -1273,6 +1290,7 @@ func (db *PostgreSQL) ListAgents(ctx context.Context, tx pgx.Tx, filter *AgentFi
 		results = append(results, resp)
 	}
 	if err := rows.Err(); err != nil {
+		logger.Error("Error iterating agent rows", zap.Error(err))
 		return nil, "", fmt.Errorf("error iterating agent rows: %w", err)
 	}
 
@@ -1281,6 +1299,7 @@ func (db *PostgreSQL) ListAgents(ctx context.Context, tx pgx.Tx, filter *AgentFi
 		last := results[len(results)-1]
 		nextCursor = last.Agent.Name + ":" + last.Agent.Version
 	}
+	logger.Info("Agents list retrieved", zap.Int("count", len(results)))
 	return results, nextCursor, nil
 }
 
