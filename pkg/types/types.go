@@ -17,7 +17,7 @@ type ServiceFactory func(base service.RegistryService) service.RegistryService
 
 // DatabaseFactory is a function type that creates a database implementation.
 // This allows implementors to run additional migrations and wrap the database.
-type DatabaseFactory func(ctx context.Context, databaseURL string, baseDB database.Database) (database.Database, error)
+type DatabaseFactory func(ctx context.Context, databaseURL string, baseDB database.Database, authz auth.Authorizer) (database.Database, error)
 
 // AppOptions contains configuration for the registry app.
 // All fields are optional and allow external developers to extend functionality.

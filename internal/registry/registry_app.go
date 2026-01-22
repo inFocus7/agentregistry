@@ -75,7 +75,7 @@ func App(_ context.Context, opts ...types.AppOptions) error {
 	// Allow implementors to wrap the database, and run additional migrations
 	var db database.Database = baseDB
 	if options.DatabaseFactory != nil {
-		db, err = options.DatabaseFactory(ctx, cfg.DatabaseURL, baseDB)
+		db, err = options.DatabaseFactory(ctx, cfg.DatabaseURL, baseDB, authz)
 		if err != nil {
 			if err := baseDB.Close(); err != nil {
 				log.Printf("Error closing base database connection: %v", err)
