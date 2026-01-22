@@ -182,7 +182,7 @@ func App(_ context.Context, opts ...types.AppOptions) error {
 	}
 
 	// Initialize HTTP server
-	baseServer := api.NewServer(cfg, registryService, metrics, versionInfo, options.UIHandler, authnProvider, authzProvider)
+	baseServer := api.NewServer(cfg, registryService, metrics, versionInfo, options.UIHandler, authnProvider)
 
 	var server types.Server
 	if options.HTTPServerFactory != nil {

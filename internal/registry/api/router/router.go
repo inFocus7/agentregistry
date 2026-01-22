@@ -131,7 +131,8 @@ func handle404(w http.ResponseWriter, r *http.Request) {
 }
 
 // NewHumaAPI creates a new Huma API with all routes registered
-func NewHumaAPI(cfg *config.Config, registry service.RegistryService, mux *http.ServeMux, metrics *telemetry.Metrics, versionInfo *v0.VersionBody, uiHandler http.Handler, authnProvider auth.AuthnProvider, authzProvider auth.AuthzProvider) huma.API {
+// Note: authz is handled at the DB/service layer, not at the API layer.
+func NewHumaAPI(cfg *config.Config, registry service.RegistryService, mux *http.ServeMux, metrics *telemetry.Metrics, versionInfo *v0.VersionBody, uiHandler http.Handler, authnProvider auth.AuthnProvider) huma.API {
 	// Create Huma API configuration
 	humaConfig := huma.DefaultConfig("Official MCP Registry", "1.0.0")
 	humaConfig.Info.Description = "A community driven registry service for Model Context Protocol (MCP) servers.\n\n[GitHub repository](https://github.com/modelcontextprotocol/registry) | [Documentation](https://github.com/modelcontextprotocol/registry/tree/main/docs)"
@@ -139,18 +140,12 @@ func NewHumaAPI(cfg *config.Config, registry service.RegistryService, mux *http.
 	humaConfig.CreateHooks = []func(huma.Config) huma.Config{}
 
 	// Create a new API using humago adapter for standard library
-	jwtManager := auth.NewJWTManager(cfg)
 	api := humago.New(mux, humaConfig)
 
-	// Use provided auth providers or fallback to OSS defaults:
-	// - AuthN: JWT manager (validates tokens when present and adds them to context)
-	// - Note: AuthZ is embedded into the DB service
-	if authnProvider == nil {
-		authnProvider = jwtManager
+	// Add authn middleware if configured
+	if authnProvider != nil {
+		api.UseMiddleware(auth.AuthnMiddleware(authnProvider))
 	}
-
-	// Add authentication middleware
-	api.UseMiddleware(auth.AuthnMiddleware(authnProvider))
 
 	// Add OpenAPI tag metadata with descriptions
 	api.OpenAPI().Tags = []*huma.Tag{
