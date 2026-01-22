@@ -410,7 +410,13 @@ func addDeploymentTools(server *mcp.Server, registry service.RegistryService) {
 		if args.ServerName == "" || args.Version == "" {
 			return nil, models.Deployment{}, errors.New("name and version are required")
 		}
-		deployment, err := registry.DeployServer(ctx, args.ServerName, args.Version, args.Config, args.PreferRemote)
+
+		runtimeTarget := args.Runtime
+		if runtimeTarget == "" {
+			runtimeTarget = "local"
+		}
+
+		deployment, err := registry.DeployServer(ctx, args.ServerName, args.Version, args.Config, args.PreferRemote, runtimeTarget)
 		if err != nil {
 			return nil, models.Deployment{}, err
 		}
@@ -425,7 +431,13 @@ func addDeploymentTools(server *mcp.Server, registry service.RegistryService) {
 		if args.ServerName == "" || args.Version == "" {
 			return nil, models.Deployment{}, errors.New("name and version are required")
 		}
-		deployment, err := registry.DeployAgent(ctx, args.ServerName, args.Version, args.Config, args.PreferRemote)
+
+		runtimeTarget := args.Runtime
+		if runtimeTarget == "" {
+			runtimeTarget = "local"
+		}
+
+		deployment, err := registry.DeployAgent(ctx, args.ServerName, args.Version, args.Config, args.PreferRemote, runtimeTarget)
 		if err != nil {
 			return nil, models.Deployment{}, err
 		}

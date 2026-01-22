@@ -18,8 +18,8 @@ import (
 type fakeRegistry struct {
 	listDeploymentsFn        func(ctx context.Context) ([]*models.Deployment, error)
 	getDeploymentFn          func(ctx context.Context, name, version, artifactType string) (*models.Deployment, error)
-	deployServerFn           func(ctx context.Context, name, version string, config map[string]string, preferRemote bool) (*models.Deployment, error)
-	deployAgentFn            func(ctx context.Context, name, version string, config map[string]string, preferRemote bool) (*models.Deployment, error)
+	deployServerFn           func(ctx context.Context, name, version string, config map[string]string, preferRemote bool, runtime string) (*models.Deployment, error)
+	deployAgentFn            func(ctx context.Context, name, version string, config map[string]string, preferRemote bool, runtime string) (*models.Deployment, error)
 	updateDeploymentConfigFn func(ctx context.Context, name, version, artifactType string, config map[string]string) (*models.Deployment, error)
 	removeServerFn           func(ctx context.Context, name, version, artifactType string) error
 }
@@ -39,17 +39,18 @@ func (f *fakeRegistry) GetDeploymentByNameAndVersion(ctx context.Context, name, 
 	return nil, errors.New("not implemented")
 }
 
-func (f *fakeRegistry) DeployServer(ctx context.Context, name, version string, config map[string]string, preferRemote bool) (*models.Deployment, error) {
+func (f *fakeRegistry) DeployServer(ctx context.Context, name, version string, config map[string]string, preferRemote bool, runtime string) (*models.Deployment, error) {
 	if f.deployServerFn != nil {
-		return f.deployServerFn(ctx, name, version, config, preferRemote)
+		return f.deployServerFn(ctx, name, version, config, preferRemote, runtime)
 	}
 	return nil, errors.New("not implemented")
 }
 
-func (f *fakeRegistry) DeployAgent(ctx context.Context, name, version string, config map[string]string, preferRemote bool) (*models.Deployment, error) {
+func (f *fakeRegistry) DeployAgent(ctx context.Context, name, version string, config map[string]string, preferRemote bool, runtime string) (*models.Deployment, error) {
 	if f.deployAgentFn != nil {
-		return f.deployAgentFn(ctx, name, version, config, preferRemote)
+		return f.deployAgentFn(ctx, name, version, config, preferRemote, runtime)
 	}
+
 	return nil, errors.New("not implemented")
 }
 
@@ -319,10 +320,10 @@ func TestDeploymentTools_DeployUpdateRemove(t *testing.T) {
 
 	var removed bool
 	reg := &fakeRegistry{
-		deployServerFn: func(ctx context.Context, name, version string, config map[string]string, preferRemote bool) (*models.Deployment, error) {
+		deployServerFn: func(ctx context.Context, name, version string, config map[string]string, preferRemote bool, runtime string) (*models.Deployment, error) {
 			return deployed, nil
 		},
-		deployAgentFn: func(ctx context.Context, name, version string, config map[string]string, preferRemote bool) (*models.Deployment, error) {
+		deployAgentFn: func(ctx context.Context, name, version string, config map[string]string, preferRemote bool, runtime string) (*models.Deployment, error) {
 			return agentDep, nil
 		},
 		updateDeploymentConfigFn: func(ctx context.Context, name, version, artifactType string, config map[string]string) (*models.Deployment, error) {
