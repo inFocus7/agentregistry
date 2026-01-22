@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/agentregistry-dev/agentregistry/internal/registry/config"
 	"github.com/agentregistry-dev/agentregistry/pkg/models"
 	"github.com/agentregistry-dev/agentregistry/pkg/registry/database"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -18,11 +17,11 @@ import (
 
 type fakeRegistry struct {
 	listDeploymentsFn        func(ctx context.Context) ([]*models.Deployment, error)
-	getDeploymentFn          func(ctx context.Context, name, version string) (*models.Deployment, error)
+	getDeploymentFn          func(ctx context.Context, name, version, artifactType string) (*models.Deployment, error)
 	deployServerFn           func(ctx context.Context, name, version string, config map[string]string, preferRemote bool) (*models.Deployment, error)
 	deployAgentFn            func(ctx context.Context, name, version string, config map[string]string, preferRemote bool) (*models.Deployment, error)
-	updateDeploymentConfigFn func(ctx context.Context, name, version string, config map[string]string) (*models.Deployment, error)
-	removeServerFn           func(ctx context.Context, name, version string) error
+	updateDeploymentConfigFn func(ctx context.Context, name, version, artifactType string, config map[string]string) (*models.Deployment, error)
+	removeServerFn           func(ctx context.Context, name, version, artifactType string) error
 }
 
 // Deployment-related methods
@@ -33,9 +32,9 @@ func (f *fakeRegistry) GetDeployments(ctx context.Context) ([]*models.Deployment
 	return nil, errors.New("not implemented")
 }
 
-func (f *fakeRegistry) GetDeploymentByNameAndVersion(ctx context.Context, name, version string) (*models.Deployment, error) {
+func (f *fakeRegistry) GetDeploymentByNameAndVersion(ctx context.Context, name, version, artifactType string) (*models.Deployment, error) {
 	if f.getDeploymentFn != nil {
-		return f.getDeploymentFn(ctx, name, version)
+		return f.getDeploymentFn(ctx, name, version, artifactType)
 	}
 	return nil, errors.New("not implemented")
 }
@@ -54,16 +53,16 @@ func (f *fakeRegistry) DeployAgent(ctx context.Context, name, version string, co
 	return nil, errors.New("not implemented")
 }
 
-func (f *fakeRegistry) UpdateDeploymentConfig(ctx context.Context, name, version string, config map[string]string) (*models.Deployment, error) {
+func (f *fakeRegistry) UpdateDeploymentConfig(ctx context.Context, name, version, artifactType string, config map[string]string) (*models.Deployment, error) {
 	if f.updateDeploymentConfigFn != nil {
-		return f.updateDeploymentConfigFn(ctx, name, version, config)
+		return f.updateDeploymentConfigFn(ctx, name, version, artifactType, config)
 	}
 	return nil, errors.New("not implemented")
 }
 
-func (f *fakeRegistry) RemoveServer(ctx context.Context, name, version string) error {
+func (f *fakeRegistry) RemoveServer(ctx context.Context, name, version, artifactType string) error {
 	if f.removeServerFn != nil {
-		return f.removeServerFn(ctx, name, version)
+		return f.removeServerFn(ctx, name, version, artifactType)
 	}
 	return errors.New("not implemented")
 }
@@ -168,9 +167,7 @@ func (f *fakeRegistry) GetAgentEmbeddingMetadata(context.Context, string, string
 func TestDeploymentTools_ListAndGet(t *testing.T) {
 	ctx := context.Background()
 
-	cfg := config.NewConfig()
-	// No JWT key configured; auth is bypassed.
-
+	// No authz provider configured; auth is bypassed.
 	dep := &models.Deployment{
 		ServerName:   "com.example/echo",
 		Version:      "1.0.0",
@@ -183,7 +180,7 @@ func TestDeploymentTools_ListAndGet(t *testing.T) {
 		listDeploymentsFn: func(ctx context.Context) ([]*models.Deployment, error) {
 			return []*models.Deployment{dep}, nil
 		},
-		getDeploymentFn: func(ctx context.Context, name, version string) (*models.Deployment, error) {
+		getDeploymentFn: func(ctx context.Context, name, version, artifactType string) (*models.Deployment, error) {
 			if name == dep.ServerName && version == dep.Version {
 				return dep, nil
 			}
@@ -191,7 +188,7 @@ func TestDeploymentTools_ListAndGet(t *testing.T) {
 		},
 	}
 
-	server := NewServer(cfg, reg)
+	server := NewServer(reg)
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 	serverSession, err := server.Connect(ctx, serverTransport, nil)
 	require.NoError(t, err)
@@ -224,8 +221,9 @@ func TestDeploymentTools_ListAndGet(t *testing.T) {
 	res, err = clientSession.CallTool(ctx, &mcp.CallToolParams{
 		Name: "get_deployment",
 		Arguments: map[string]any{
-			"serverName": dep.ServerName,
-			"version":    dep.Version,
+			"serverName":   dep.ServerName,
+			"version":      dep.Version,
+			"resourceType": "mcp",
 		},
 	})
 	require.NoError(t, err)
@@ -237,19 +235,19 @@ func TestDeploymentTools_ListAndGet(t *testing.T) {
 
 func TestDeploymentTools_NoAuthConfigured_AllowsRequests(t *testing.T) {
 	ctx := context.Background()
-	// No JWT key configured; auth should be bypassed.
+	// No authz provider configured; auth should be bypassed.
 	reg := &fakeRegistry{
 		listDeploymentsFn: func(ctx context.Context) ([]*models.Deployment, error) {
 			return []*models.Deployment{
 				{ServerName: "com.example/no-auth", Version: "1.0.0", ResourceType: "mcp", Config: map[string]string{}},
 			}, nil
 		},
-		getDeploymentFn: func(ctx context.Context, name, version string) (*models.Deployment, error) {
+		getDeploymentFn: func(ctx context.Context, name, version, artifactType string) (*models.Deployment, error) {
 			return &models.Deployment{ServerName: name, Version: version, ResourceType: "mcp", Config: map[string]string{}}, nil
 		},
 	}
 
-	server := NewServer(config.NewConfig(), reg)
+	server := NewServer(reg)
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 	serverSession, err := server.Connect(ctx, serverTransport, nil)
 	require.NoError(t, err)
@@ -284,8 +282,9 @@ func TestDeploymentTools_NoAuthConfigured_AllowsRequests(t *testing.T) {
 	res, err = clientSession.CallTool(ctx, &mcp.CallToolParams{
 		Name: "get_deployment",
 		Arguments: map[string]any{
-			"serverName": "com.example/no-auth",
-			"version":    "1.0.0",
+			"serverName":   "com.example/no-auth",
+			"version":      "1.0.0",
+			"resourceType": "mcp",
 		},
 	})
 	require.NoError(t, err)
@@ -297,7 +296,7 @@ func TestDeploymentTools_NoAuthConfigured_AllowsRequests(t *testing.T) {
 
 func TestDeploymentTools_DeployUpdateRemove(t *testing.T) {
 	ctx := context.Background()
-	cfg := config.NewConfig() // auth disabled -> easy happy path
+	// No authz provider -> easy happy path
 
 	deployed := &models.Deployment{
 		ServerName:   "com.example/echo",
@@ -326,16 +325,16 @@ func TestDeploymentTools_DeployUpdateRemove(t *testing.T) {
 		deployAgentFn: func(ctx context.Context, name, version string, config map[string]string, preferRemote bool) (*models.Deployment, error) {
 			return agentDep, nil
 		},
-		updateDeploymentConfigFn: func(ctx context.Context, name, version string, config map[string]string) (*models.Deployment, error) {
+		updateDeploymentConfigFn: func(ctx context.Context, name, version, artifactType string, config map[string]string) (*models.Deployment, error) {
 			return updated, nil
 		},
-		getDeploymentFn: func(ctx context.Context, name, version string) (*models.Deployment, error) {
+		getDeploymentFn: func(ctx context.Context, name, version, artifactType string) (*models.Deployment, error) {
 			if name == deployed.ServerName && version == deployed.Version {
 				return deployed, nil
 			}
 			return nil, errors.New("not found")
 		},
-		removeServerFn: func(ctx context.Context, name, version string) error {
+		removeServerFn: func(ctx context.Context, name, version, artifactType string) error {
 			if name == deployed.ServerName && version == deployed.Version {
 				removed = true
 				return nil
@@ -344,7 +343,7 @@ func TestDeploymentTools_DeployUpdateRemove(t *testing.T) {
 		},
 	}
 
-	server := NewServer(cfg, reg)
+	server := NewServer(reg)
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 	serverSession, err := server.Connect(ctx, serverTransport, nil)
 	require.NoError(t, err)
@@ -396,9 +395,10 @@ func TestDeploymentTools_DeployUpdateRemove(t *testing.T) {
 	res, err = clientSession.CallTool(ctx, &mcp.CallToolParams{
 		Name: "update_deployment_config",
 		Arguments: map[string]any{
-			"serverName": "com.example/echo",
-			"version":    "1.0.0",
-			"config":     map[string]string{"ENV": "staging"},
+			"serverName":   "com.example/echo",
+			"version":      "1.0.0",
+			"resourceType": "mcp",
+			"config":       map[string]string{"ENV": "staging"},
 		},
 	})
 	require.NoError(t, err)
@@ -411,8 +411,9 @@ func TestDeploymentTools_DeployUpdateRemove(t *testing.T) {
 	res, err = clientSession.CallTool(ctx, &mcp.CallToolParams{
 		Name: "remove_deployment",
 		Arguments: map[string]any{
-			"serverName": "com.example/echo",
-			"version":    "1.0.0",
+			"serverName":   "com.example/echo",
+			"version":      "1.0.0",
+			"resourceType": "mcp",
 		},
 	})
 	require.NoError(t, err)
@@ -421,41 +422,6 @@ func TestDeploymentTools_DeployUpdateRemove(t *testing.T) {
 	var delResp map[string]string
 	require.NoError(t, json.Unmarshal(raw, &delResp))
 	assert.Equal(t, "deleted", delResp["status"])
-}
-
-func TestDeploymentTools_AuthFailure(t *testing.T) {
-	ctx := context.Background()
-	t.Setenv("AGENT_REGISTRY_JWT_PRIVATE_KEY", "0000000000000000000000000000000000000000000000000000000000000000")
-	reg := &fakeRegistry{
-		listDeploymentsFn: func(ctx context.Context) ([]*models.Deployment, error) {
-			return nil, nil
-		},
-	}
-	cfg := config.NewConfig()
-	server := NewServer(cfg, reg)
-	clientTransport, serverTransport := mcp.NewInMemoryTransports()
-	serverSession, err := server.Connect(ctx, serverTransport, nil)
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, serverSession.Wait())
-	}()
-
-	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v0.0.1"}, nil)
-	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	require.NoError(t, err)
-	defer func() {
-		_ = clientSession.Close()
-	}()
-
-	res, err := clientSession.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "list_deployments",
-		Arguments: map[string]any{},
-	})
-	require.NoError(t, err)
-	require.NotNil(t, res)
-	assert.True(t, res.IsError)
-	raw, _ := json.Marshal(res.Content)
-	assert.Contains(t, string(raw), "bearer token")
 }
 
 func TestDeploymentTools_FilterResourceType(t *testing.T) {
@@ -480,7 +446,7 @@ func TestDeploymentTools_FilterResourceType(t *testing.T) {
 			return deployments, nil
 		},
 	}
-	server := NewServer(config.NewConfig(), reg)
+	server := NewServer(reg)
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 	serverSession, err := server.Connect(ctx, serverTransport, nil)
 	require.NoError(t, err)

@@ -72,6 +72,11 @@ func (o *PublicAuthzProvider) Check(ctx context.Context, s Session, verb Permiss
 		return ErrUnauthorized
 	}
 
+	// If no JWT manager is configured, allow authenticated sessions for protected actions
+	if o.jwtManager == nil {
+		return nil
+	}
+
 	// Delegate to JWT manager for permission checking
 	return o.jwtManager.Check(ctx, s, verb, resource)
 }

@@ -12,13 +12,11 @@ import (
 	"syscall"
 	"time"
 
-	mcpauth "github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	mcpregistry "github.com/agentregistry-dev/agentregistry/internal/mcp/registryserver"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/api"
 	v0 "github.com/agentregistry-dev/agentregistry/internal/registry/api/handlers/v0"
-	registryauth "github.com/agentregistry-dev/agentregistry/internal/registry/auth"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/config"
 	internaldb "github.com/agentregistry-dev/agentregistry/internal/registry/database"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/embeddings"
@@ -47,10 +45,23 @@ func App(_ context.Context, opts ...types.AppOptions) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Build authorizer from options (before database creation)
-	jwtManager := auth.NewJWTManager(cfg)
+	// Build auth providers from options (before database creation)
+	// Only create jwtManager if JWT is configured
+	var jwtManager *auth.JWTManager
+	if cfg.JWTPrivateKey != "" {
+		jwtManager = auth.NewJWTManager(cfg)
+	}
+
+	// Resolve authn provider: use provided, or default to JWT-based if configured
+	authnProvider := options.AuthnProvider
+	if authnProvider == nil && jwtManager != nil {
+		authnProvider = jwtManager
+	}
+
+	// Resolve authz provider: use provided, or default to public authz
 	authzProvider := options.AuthzProvider
 	if authzProvider == nil {
+		log.Println("Using public authz provider")
 		authzProvider = auth.NewPublicAuthzProvider(jwtManager)
 	}
 	authz := auth.Authorizer{Authz: authzProvider}
@@ -171,7 +182,7 @@ func App(_ context.Context, opts ...types.AppOptions) error {
 	}
 
 	// Initialize HTTP server
-	baseServer := api.NewServer(cfg, registryService, metrics, versionInfo, options.UIHandler, options.AuthnProvider, options.AuthzProvider)
+	baseServer := api.NewServer(cfg, registryService, metrics, versionInfo, options.UIHandler, authnProvider, authzProvider)
 
 	var server types.Server
 	if options.HTTPServerFactory != nil {
@@ -186,34 +197,15 @@ func App(_ context.Context, opts ...types.AppOptions) error {
 
 	var mcpHTTPServer *http.Server
 	if cfg.MCPPort > 0 {
-		var jwtManager *registryauth.JWTManager
-		if cfg.JWTPrivateKey != "" {
-			jwtManager = registryauth.NewJWTManager(cfg)
-		}
-
-		mcpServer := mcpregistry.NewServer(cfg, registryService)
+		mcpServer := mcpregistry.NewServer(registryService)
 
 		var handler http.Handler = mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
 			return mcpServer
 		}, &mcp.StreamableHTTPOptions{})
 
-		if jwtManager != nil {
-			verifier := func(ctx context.Context, token string, req *http.Request) (*mcpauth.TokenInfo, error) {
-				claims, err := jwtManager.ValidateToken(ctx, token)
-				if err != nil {
-					return nil, fmt.Errorf("%w: %v", mcpauth.ErrInvalidToken, err)
-				}
-				exp := time.Unix(int64(claims.ExpiresAt.Unix()), 0)
-				return &mcpauth.TokenInfo{
-					Scopes:     []string{},
-					Expiration: exp,
-					UserID:     claims.AuthMethodSubject,
-					Extra: map[string]any{
-						"registry_claims": claims,
-					},
-				}, nil
-			}
-			handler = mcpauth.RequireBearerToken(verifier, nil)(handler)
+		// Set up authentication middleware if one is configured
+		if authnProvider != nil {
+			handler = mcpAuthnMiddleware(authnProvider)(handler)
 		}
 
 		addr := ":" + strconv.Itoa(int(cfg.MCPPort))
@@ -263,4 +255,22 @@ func App(_ context.Context, opts ...types.AppOptions) error {
 
 	log.Println("Server exiting")
 	return nil
+}
+
+// mcpAuthnMiddleware creates a middleware that uses the AuthnProvider to authenticate requests and add to session context.
+// this session context is used by the db + authz provider to check permissions.
+func mcpAuthnMiddleware(authn auth.AuthnProvider) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+
+			// authenticate using the configured provider
+			session, err := authn.Authenticate(ctx, r.Header.Get, r.URL.Query())
+			if err == nil && session != nil {
+				ctx = auth.AuthSessionTo(ctx, session)
+				r = r.WithContext(ctx)
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }

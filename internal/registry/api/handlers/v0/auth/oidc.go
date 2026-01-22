@@ -238,7 +238,7 @@ func (h *OIDCHandler) buildPermissions(_ *OIDCClaims) []auth.Permission {
 	var permissions []auth.Permission
 
 	if h.config.OIDCReadPerms != "" {
-		for _, pattern := range strings.Split(h.config.OIDCReadPerms, ",") {
+		for pattern := range strings.SplitSeq(h.config.OIDCReadPerms, ",") {
 			pattern = strings.TrimSpace(pattern)
 			if pattern != "" {
 				permissions = append(permissions, auth.Permission{
@@ -250,7 +250,7 @@ func (h *OIDCHandler) buildPermissions(_ *OIDCClaims) []auth.Permission {
 	}
 
 	if h.config.OIDCPushPerms != "" {
-		for _, pattern := range strings.Split(h.config.OIDCPushPerms, ",") {
+		for pattern := range strings.SplitSeq(h.config.OIDCPushPerms, ",") {
 			pattern = strings.TrimSpace(pattern)
 			if pattern != "" {
 				permissions = append(permissions, auth.Permission{
@@ -262,7 +262,7 @@ func (h *OIDCHandler) buildPermissions(_ *OIDCClaims) []auth.Permission {
 	}
 
 	if h.config.OIDCPullPerms != "" {
-		for _, pattern := range strings.Split(h.config.OIDCPullPerms, ",") {
+		for pattern := range strings.SplitSeq(h.config.OIDCPullPerms, ",") {
 			pattern = strings.TrimSpace(pattern)
 			if pattern != "" {
 				permissions = append(permissions, auth.Permission{
@@ -274,7 +274,7 @@ func (h *OIDCHandler) buildPermissions(_ *OIDCClaims) []auth.Permission {
 	}
 
 	if h.config.OIDCDeployPerms != "" {
-		for _, pattern := range strings.Split(h.config.OIDCDeployPerms, ",") {
+		for pattern := range strings.SplitSeq(h.config.OIDCDeployPerms, ",") {
 			pattern = strings.TrimSpace(pattern)
 			if pattern != "" {
 				permissions = append(permissions, auth.Permission{
@@ -286,7 +286,7 @@ func (h *OIDCHandler) buildPermissions(_ *OIDCClaims) []auth.Permission {
 	}
 
 	if h.config.OIDCRunPerms != "" {
-		for _, pattern := range strings.Split(h.config.OIDCRunPerms, ",") {
+		for pattern := range strings.SplitSeq(h.config.OIDCRunPerms, ",") {
 			pattern = strings.TrimSpace(pattern)
 			if pattern != "" {
 				permissions = append(permissions, auth.Permission{
@@ -323,7 +323,7 @@ func (h *OIDCHandler) buildPermissions(_ *OIDCClaims) []auth.Permission {
 	}
 
 	if h.config.OIDCDeletePerms != "" {
-		for _, pattern := range strings.Split(h.config.OIDCDeletePerms, ",") {
+		for pattern := range strings.SplitSeq(h.config.OIDCDeletePerms, ",") {
 			pattern = strings.TrimSpace(pattern)
 			if pattern != "" {
 				permissions = append(permissions, auth.Permission{

@@ -59,4 +59,3 @@ type AgentListResponse struct {
 	Agents   []AgentResponse `json:"agents"`
 	Metadata AgentMetadata   `json:"metadata"`
 }
-

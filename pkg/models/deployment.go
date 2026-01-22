@@ -13,4 +13,3 @@ type Deployment struct {
 	PreferRemote bool              `json:"preferRemote"`
 	ResourceType string            `json:"resourceType"` // "mcp" or "agent"
 }
-
