@@ -12,21 +12,21 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-type requestLoggerKeyType struct{}
+type eventLoggerKeyType struct{}
 type outcomeHolderKeyType struct{}
 
-var requestLoggerKey = requestLoggerKeyType{}
+var eventLoggerKey = eventLoggerKeyType{}
 var outcomeHolderKey = outcomeHolderKeyType{}
 
-func ContextWithLogger(ctx context.Context, logger *RequestLogger) context.Context {
-	return context.WithValue(ctx, requestLoggerKey, logger)
+func ContextWithLogger(ctx context.Context, logger *EventLogger) context.Context {
+	return context.WithValue(ctx, eventLoggerKey, logger)
 }
 
-func FromContext(ctx context.Context) *RequestLogger {
-	if logger, ok := ctx.Value(requestLoggerKey).(*RequestLogger); ok {
+func FromContext(ctx context.Context) *EventLogger {
+	if logger, ok := ctx.Value(eventLoggerKey).(*EventLogger); ok {
 		return logger
 	}
-	return newNoOpRequestLogger()
+	return newNoOpEventLogger()
 }
 
 // OutcomeHolder is a mutable container for Outcome that handlers can update.
@@ -122,7 +122,7 @@ type Outcome struct {
 // and emits a single "wide" log entry via Finalize().
 // Fields can be added globally or under namespaces (e.g., "handler", "service", "db")
 // for clear ownership in the final log output.
-type RequestLogger struct {
+type EventLogger struct {
 	baseLogger *zap.Logger
 	config     *parsedLoggingConfig
 	requestID  string
@@ -136,7 +136,7 @@ type RequestLogger struct {
 	noop       bool
 }
 
-func NewRequestLogger(name string, path string, cfg *LoggingConfig) *RequestLogger {
+func NewEventLogger(name string, path string, cfg *LoggingConfig) *EventLogger {
 	baseLogger, err := zap.NewProduction()
 	if err != nil {
 		panic(err)
@@ -151,7 +151,7 @@ func NewRequestLogger(name string, path string, cfg *LoggingConfig) *RequestLogg
 
 	requestID := ulid.Make().String()
 
-	return &RequestLogger{
+	return &EventLogger{
 		baseLogger: baseLogger.Named(name),
 		config:     parsedCfg,
 		requestID:  requestID,
@@ -162,22 +162,22 @@ func NewRequestLogger(name string, path string, cfg *LoggingConfig) *RequestLogg
 	}
 }
 
-func NewRequestLoggerWithID(name string, path string, requestID string, cfg *LoggingConfig) *RequestLogger {
-	logger := NewRequestLogger(name, path, cfg)
+func NewEventLoggerWithID(name string, path string, requestID string, cfg *LoggingConfig) *EventLogger {
+	logger := NewEventLogger(name, path, cfg)
 	logger.requestID = requestID
 	logger.fields[0] = zap.String("request_id", requestID)
 	return logger
 }
 
-func newNoOpRequestLogger() *RequestLogger {
-	return &RequestLogger{noop: true, fields: []zap.Field{}, namespaces: make(map[string][]zap.Field)}
+func newNoOpEventLogger() *EventLogger {
+	return &EventLogger{noop: true, fields: []zap.Field{}, namespaces: make(map[string][]zap.Field)}
 }
 
-func (l *RequestLogger) RequestID() string {
+func (l *EventLogger) RequestID() string {
 	return l.requestID
 }
 
-func (l *RequestLogger) AddFields(fields ...zap.Field) {
+func (l *EventLogger) AddFields(fields ...zap.Field) {
 	if l.noop {
 		return
 	}
@@ -190,7 +190,7 @@ func (l *RequestLogger) AddFields(fields ...zap.Field) {
 // In the final log output, these will appear as nested objects:
 //
 //	{"request_id": "abc", "handler": {"input": {...}}, "service": {"filter": {...}}, "db": {"duration_ms": 12}}
-func (l *RequestLogger) AddNamespacedFields(namespace string, fields ...zap.Field) {
+func (l *EventLogger) AddNamespacedFields(namespace string, fields ...zap.Field) {
 	if l.noop {
 		return
 	}
@@ -199,15 +199,15 @@ func (l *RequestLogger) AddNamespacedFields(namespace string, fields ...zap.Fiel
 	}
 }
 
-func (l *RequestLogger) Skip() {
+func (l *EventLogger) Skip() {
 	l.skipLog = true
 }
 
-func (l *RequestLogger) SetErrorOnly() {
+func (l *EventLogger) SetErrorOnly() {
 	l.errorOnly = true
 }
 
-func (l *RequestLogger) Finalize(outcome Outcome) {
+func (l *EventLogger) Finalize(outcome Outcome) {
 	if l.noop || l.finalized {
 		return
 	}
@@ -266,7 +266,7 @@ func (l *RequestLogger) Finalize(outcome Outcome) {
 	}
 }
 
-func (l *RequestLogger) shouldLog(outcome Outcome) bool {
+func (l *EventLogger) shouldLog(outcome Outcome) bool {
 	if l.config.excludePaths[l.path] {
 		return false
 	}
@@ -287,7 +287,7 @@ func (l *RequestLogger) shouldLog(outcome Outcome) bool {
 	return l.hashToFloat() < l.config.successSampleRate
 }
 
-func (l *RequestLogger) hashToFloat() float64 {
+func (l *EventLogger) hashToFloat() float64 {
 	h := fnv.New64a()
 	h.Write([]byte(l.requestID))
 	return float64(h.Sum64()) / float64(^uint64(0))
@@ -295,7 +295,7 @@ func (l *RequestLogger) hashToFloat() float64 {
 
 const redactedValue = "***"
 
-func (l *RequestLogger) redactField(f zap.Field) zap.Field {
+func (l *EventLogger) redactField(f zap.Field) zap.Field {
 	if l.config.redactRegex == nil {
 		return f
 	}

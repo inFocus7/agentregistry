@@ -81,11 +81,11 @@ func RequestLoggingMiddleware(cfg *telemetry.LoggingConfig, options ...Middlewar
 		}
 
 		// Create logger
-		var reqLog *telemetry.RequestLogger
+		var reqLog *telemetry.EventLogger
 		if requestID != "" {
-			reqLog = telemetry.NewRequestLoggerWithID("api", path, requestID, cfg)
+			reqLog = telemetry.NewEventLoggerWithID("api", path, requestID, cfg)
 		} else {
-			reqLog = telemetry.NewRequestLogger("api", path, cfg)
+			reqLog = telemetry.NewEventLogger("api", path, cfg)
 		}
 
 		// Add request metadata

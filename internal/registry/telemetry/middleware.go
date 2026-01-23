@@ -49,11 +49,11 @@ func LoggingMiddleware(cfg *LoggingConfig) func(http.Handler) http.Handler {
 				requestID = r.Header.Get("X-Correlation-ID")
 			}
 
-			var logger *RequestLogger
+			var logger *EventLogger
 			if requestID != "" {
-				logger = NewRequestLoggerWithID("api", path, requestID, cfg)
+				logger = NewEventLoggerWithID("api", path, requestID, cfg)
 			} else {
-				logger = NewRequestLogger("api", path, cfg)
+				logger = NewEventLogger("api", path, cfg)
 			}
 
 			logger.AddFields(
