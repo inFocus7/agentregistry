@@ -536,12 +536,47 @@ func (s *registryServiceImpl) ListAgents(ctx context.Context, filter *database.A
 
 // GetAgentByName retrieves the latest version of an agent by its name
 func (s *registryServiceImpl) GetAgentByName(ctx context.Context, agentName string) (*models.AgentResponse, error) {
-	return s.db.GetAgentByName(ctx, nil, agentName)
+	reqLog := logging.EventLoggerFromContext(ctx)
+
+	reqLog.AddNamespacedFields("service",
+		zap.String("method", "GetAgentByName"),
+		zap.String("agent_name", agentName),
+	)
+
+	agent, err := s.db.GetAgentByName(ctx, nil, agentName)
+	if err != nil {
+		reqLog.AddNamespacedFields("service", zap.Bool("not_found", errors.Is(err, database.ErrNotFound)))
+		return nil, err
+	}
+
+	reqLog.AddNamespacedFields("service",
+		zap.String("result_version", agent.Agent.Version),
+		zap.Bool("is_latest", agent.Meta.Official.IsLatest),
+	)
+	return agent, nil
 }
 
 // GetAgentByNameAndVersion retrieves a specific version of an agent by name and version
 func (s *registryServiceImpl) GetAgentByNameAndVersion(ctx context.Context, agentName, version string) (*models.AgentResponse, error) {
-	return s.db.GetAgentByNameAndVersion(ctx, nil, agentName, version)
+	reqLog := logging.EventLoggerFromContext(ctx)
+
+	reqLog.AddNamespacedFields("service",
+		zap.String("method", "GetAgentByNameAndVersion"),
+		zap.String("agent_name", agentName),
+		zap.String("version", version),
+	)
+
+	agent, err := s.db.GetAgentByNameAndVersion(ctx, nil, agentName, version)
+	if err != nil {
+		reqLog.AddNamespacedFields("service", zap.Bool("not_found", errors.Is(err, database.ErrNotFound)))
+		return nil, err
+	}
+
+	reqLog.AddNamespacedFields("service",
+		zap.String("result_version", agent.Agent.Version),
+		zap.Bool("is_latest", agent.Meta.Official.IsLatest),
+	)
+	return agent, nil
 }
 
 // GetAllVersionsByAgentName retrieves all versions for an agent

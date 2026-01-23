@@ -1309,6 +1309,15 @@ func (db *PostgreSQL) ListAgents(ctx context.Context, tx pgx.Tx, filter *AgentFi
 }
 
 func (db *PostgreSQL) GetAgentByName(ctx context.Context, tx pgx.Tx, agentName string) (*models.AgentResponse, error) {
+	reqLog := logging.EventLoggerFromContext(ctx)
+	queryStart := time.Now()
+
+	reqLog.AddNamespacedFields("db",
+		zap.String("method", "GetAgentByName"),
+		zap.String("table", "agents"),
+		zap.String("agent_name", agentName),
+	)
+
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -1324,6 +1333,10 @@ func (db *PostgreSQL) GetAgentByName(ctx context.Context, tx pgx.Tx, agentName s
 	var isLatest, published bool
 	var valueJSON []byte
 	if err := db.getExecutor(tx).QueryRow(ctx, query, agentName).Scan(&name, &version, &status, &publishedAt, &updatedAt, &isLatest, &published, &valueJSON); err != nil {
+		reqLog.AddNamespacedFields("db",
+			zap.Duration("query_duration", time.Since(queryStart)),
+			zap.Bool("found", false),
+		)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -1333,6 +1346,13 @@ func (db *PostgreSQL) GetAgentByName(ctx context.Context, tx pgx.Tx, agentName s
 	if err := json.Unmarshal(valueJSON, &agentJSON); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal agent JSON: %w", err)
 	}
+
+	reqLog.AddNamespacedFields("db",
+		zap.Duration("query_duration", time.Since(queryStart)),
+		zap.Bool("found", true),
+		zap.String("result_version", version),
+	)
+
 	return &models.AgentResponse{
 		Agent: agentJSON,
 		Meta: models.AgentResponseMeta{
@@ -1348,6 +1368,16 @@ func (db *PostgreSQL) GetAgentByName(ctx context.Context, tx pgx.Tx, agentName s
 }
 
 func (db *PostgreSQL) GetAgentByNameAndVersion(ctx context.Context, tx pgx.Tx, agentName, version string) (*models.AgentResponse, error) {
+	reqLog := logging.EventLoggerFromContext(ctx)
+	queryStart := time.Now()
+
+	reqLog.AddNamespacedFields("db",
+		zap.String("method", "GetAgentByNameAndVersion"),
+		zap.String("table", "agents"),
+		zap.String("agent_name", agentName),
+		zap.String("version", version),
+	)
+
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -1362,6 +1392,10 @@ func (db *PostgreSQL) GetAgentByNameAndVersion(ctx context.Context, tx pgx.Tx, a
 	var isLatest bool
 	var valueJSON []byte
 	if err := db.getExecutor(tx).QueryRow(ctx, query, agentName, version).Scan(&name, &vers, &status, &publishedAt, &updatedAt, &isLatest, &valueJSON); err != nil {
+		reqLog.AddNamespacedFields("db",
+			zap.Duration("query_duration", time.Since(queryStart)),
+			zap.Bool("found", false),
+		)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -1371,6 +1405,12 @@ func (db *PostgreSQL) GetAgentByNameAndVersion(ctx context.Context, tx pgx.Tx, a
 	if err := json.Unmarshal(valueJSON, &agentJSON); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal agent JSON: %w", err)
 	}
+
+	reqLog.AddNamespacedFields("db",
+		zap.Duration("query_duration", time.Since(queryStart)),
+		zap.Bool("found", true),
+	)
+
 	return &models.AgentResponse{
 		Agent: agentJSON,
 		Meta: models.AgentResponseMeta{

@@ -173,14 +173,38 @@ func RegisterAgentsEndpoints(api huma.API, pathPrefix string, registry service.R
 		Description: "Get detailed information about a specific version of an Agentic agent. Use the special version 'latest' to get the latest version.",
 		Tags:        tags,
 	}, func(ctx context.Context, input *AgentVersionDetailInput) (*Response[agentmodels.AgentResponse], error) {
+		reqLog := logging.EventLoggerFromContext(ctx)
+
+		logging.L(ctx, logging.HandlerLog).Info("getting agent version")
+
+		reqLog.AddNamespacedFields("handler",
+			zap.Any("input", input),
+			zap.Bool("is_admin", isAdmin),
+		)
+
 		agentName, err := url.PathUnescape(input.AgentName)
 		if err != nil {
+			logging.SetEventOutcome(ctx, logging.EventOutcome{
+				Level:   zapcore.WarnLevel,
+				Error:   err,
+				Message: "Invalid agent name encoding",
+			})
 			return nil, huma.Error400BadRequest("Invalid agent name encoding", err)
 		}
 		version, err := url.PathUnescape(input.Version)
 		if err != nil {
+			logging.SetEventOutcome(ctx, logging.EventOutcome{
+				Level:   zapcore.WarnLevel,
+				Error:   err,
+				Message: "Invalid version encoding",
+			})
 			return nil, huma.Error400BadRequest("Invalid version encoding", err)
 		}
+
+		reqLog.AddNamespacedFields("handler",
+			zap.String("agent_name", agentName),
+			zap.String("version", version),
+		)
 
 		var agentResp *agentmodels.AgentResponse
 		if version == "latest" {
@@ -190,10 +214,30 @@ func RegisterAgentsEndpoints(api huma.API, pathPrefix string, registry service.R
 		}
 		if err != nil {
 			if err.Error() == errRecordNotFound || errors.Is(err, database.ErrNotFound) {
+				logging.SetEventOutcome(ctx, logging.EventOutcome{
+					Level:   zapcore.WarnLevel,
+					Message: "Agent not found",
+				})
 				return nil, huma.Error404NotFound("Agent not found")
 			}
+			logging.SetEventOutcome(ctx, logging.EventOutcome{
+				Level:   zapcore.ErrorLevel,
+				Error:   err,
+				Message: "Failed to get agent details",
+			})
 			return nil, huma.Error500InternalServerError("Failed to get agent details", err)
 		}
+
+		reqLog.AddNamespacedFields("handler",
+			zap.String("result_agent_name", agentResp.Agent.Name),
+			zap.String("result_version", agentResp.Agent.Version),
+		)
+
+		logging.SetEventOutcome(ctx, logging.EventOutcome{
+			Level:   zapcore.InfoLevel,
+			Message: "Agent version retrieved",
+		})
+
 		return &Response[agentmodels.AgentResponse]{Body: *agentResp}, nil
 	})
 
