@@ -2,6 +2,7 @@
 package router
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+	"go.uber.org/zap"
 
 	v0 "github.com/agentregistry-dev/agentregistry/internal/registry/api/handlers/v0"
 	"github.com/agentregistry-dev/agentregistry/internal/registry/config"
@@ -36,6 +38,88 @@ func getRoutePath(ctx huma.Context) string {
 
 	// Fallback to URL path (less ideal for metrics as it includes path parameters)
 	return ctx.URL().Path
+}
+
+// humaContext is a type alias to avoid naming conflict when embedding
+type humaContext huma.Context
+
+// requestLoggerContext wraps huma.Context to inject a custom Go context
+type requestLoggerContext struct {
+	humaContext
+	ctx context.Context
+}
+
+func (c *requestLoggerContext) Context() context.Context {
+	return c.ctx
+}
+
+// RequestLoggingMiddleware creates a RequestLogger per request and stores it in context.
+// Handlers retrieve it via telemetry.FromContext(ctx) and add namespaced fields.
+// Handlers can set custom outcome via telemetry.SetOutcomePtr().
+func RequestLoggingMiddleware(cfg *telemetry.LoggingConfig, options ...MiddlewareOption) func(huma.Context, func(huma.Context)) {
+	mwCfg := &middlewareConfig{skipPaths: make(map[string]bool)}
+	for _, opt := range options {
+		opt(mwCfg)
+	}
+
+	return func(ctx huma.Context, next func(huma.Context)) {
+		path := ctx.URL().Path
+
+		// Skip logging for health/metrics/etc
+		pathParts := strings.Split(path, "/")
+		if len(pathParts) > 0 {
+			if mwCfg.skipPaths["/"+pathParts[len(pathParts)-1]] || mwCfg.skipPaths[path] {
+				next(ctx)
+				return
+			}
+		}
+
+		// Check for existing request ID
+		requestID := ctx.Header("X-Request-ID")
+		if requestID == "" {
+			requestID = ctx.Header("X-Correlation-ID")
+		}
+
+		// Create logger
+		var reqLog *telemetry.RequestLogger
+		if requestID != "" {
+			reqLog = telemetry.NewRequestLoggerWithID("api", path, requestID, cfg)
+		} else {
+			reqLog = telemetry.NewRequestLogger("api", path, cfg)
+		}
+
+		// Add request metadata
+		reqLog.AddFields(
+			zap.String("method", ctx.Method()),
+			zap.String("user_agent", ctx.Header("User-Agent")),
+			zap.String("remote_addr", ctx.RemoteAddr()),
+		)
+
+		// Set response header for tracing
+		ctx.SetHeader("X-Request-ID", reqLog.RequestID())
+
+		// Create mutable outcome holder that handler can update
+		outcomeHolder := &telemetry.OutcomeHolder{}
+
+		// Inject logger and outcome holder into context
+		newCtx := telemetry.ContextWithLogger(ctx.Context(), reqLog)
+		newCtx = telemetry.ContextWithOutcomeHolder(newCtx, outcomeHolder)
+		wrappedCtx := &requestLoggerContext{humaContext: ctx, ctx: newCtx}
+
+		next(wrappedCtx)
+
+		// Use handler's outcome if set, otherwise derive from status code
+		if outcomeHolder.Outcome != nil {
+			outcomeHolder.Outcome.StatusCode = ctx.Status() // Ensure status matches response
+			reqLog.Finalize(*outcomeHolder.Outcome)
+		} else {
+			reqLog.Finalize(telemetry.Outcome{
+				Level:      telemetry.LevelFromStatusCode(ctx.Status()),
+				StatusCode: ctx.Status(),
+				Message:    "request completed",
+			})
+		}
+	}
 }
 
 func MetricTelemetryMiddleware(metrics *telemetry.Metrics, options ...MiddlewareOption) func(huma.Context, func(huma.Context)) {
@@ -187,7 +271,12 @@ func NewHumaAPI(cfg *config.Config, registry service.RegistryService, mux *http.
 		},
 	}
 
-	// Add metrics middleware with options
+	// Add request logging middleware
+	api.UseMiddleware(RequestLoggingMiddleware(nil,
+		WithSkipPaths("/health", "/metrics", "/ping", "/docs"),
+	))
+
+	// Add metrics middleware
 	api.UseMiddleware(MetricTelemetryMiddleware(metrics,
 		WithSkipPaths("/health", "/metrics", "/ping", "/docs"),
 	))

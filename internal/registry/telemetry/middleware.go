@@ -1,7 +1,6 @@
 package telemetry
 
 import (
-	"context"
 	"net/http"
 
 	"go.uber.org/zap"
@@ -65,7 +64,10 @@ func LoggingMiddleware(cfg *LoggingConfig) func(http.Handler) http.Handler {
 
 			w.Header().Set("X-Request-ID", logger.RequestID())
 
+			// Create outcome holder for handler to populate
+			outcomeHolder := &OutcomeHolder{}
 			ctx := ContextWithLogger(r.Context(), logger)
+			ctx = ContextWithOutcomeHolder(ctx, outcomeHolder)
 			recorder := NewResponseRecorder(w)
 
 			defer func() {
@@ -82,8 +84,9 @@ func LoggingMiddleware(cfg *LoggingConfig) func(http.Handler) http.Handler {
 
 			next.ServeHTTP(recorder, r.WithContext(ctx))
 
-			if outcome := OutcomeFromContext(ctx); outcome != nil {
-				logger.Finalize(*outcome)
+			if outcomeHolder.Outcome != nil {
+				outcomeHolder.Outcome.StatusCode = recorder.StatusCode
+				logger.Finalize(*outcomeHolder.Outcome)
 			} else {
 				logger.Finalize(Outcome{
 					Level:      LevelFromStatusCode(recorder.StatusCode),
@@ -93,19 +96,4 @@ func LoggingMiddleware(cfg *LoggingConfig) func(http.Handler) http.Handler {
 			}
 		})
 	}
-}
-
-type outcomeKeyType struct{}
-
-var outcomeKey = outcomeKeyType{}
-
-func SetOutcome(ctx context.Context, outcome Outcome) context.Context {
-	return context.WithValue(ctx, outcomeKey, &outcome)
-}
-
-func OutcomeFromContext(ctx context.Context) *Outcome {
-	if outcome, ok := ctx.Value(outcomeKey).(*Outcome); ok {
-		return outcome
-	}
-	return nil
 }

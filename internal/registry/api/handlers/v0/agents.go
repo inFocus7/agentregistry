@@ -63,15 +63,10 @@ func RegisterAgentsEndpoints(api huma.API, pathPrefix string, registry service.R
 		Description: "Get a paginated list of Agentic agents from the registry",
 		Tags:        tags,
 	}, func(ctx context.Context, input *ListAgentsInput) (*Response[agentmodels.AgentListResponse], error) {
-		path := pathPrefix + "/agents"
+		// Get logger from middleware (it handles lifecycle, we just add fields)
+		reqLog := telemetry.FromContext(ctx)
 
-		// Create request logger and store in context for downstream layers
-		reqLog := telemetry.NewRequestLogger("api", path, nil)
-		ctx = telemetry.ContextWithLogger(ctx, reqLog)
-
-		// Add handler-specific fields under "handler" namespace
 		reqLog.AddNamespacedFields("handler",
-			zap.String("method", http.MethodGet),
 			zap.Any("input", input),
 			zap.Bool("is_admin", isAdmin),
 		)
@@ -89,11 +84,10 @@ func RegisterAgentsEndpoints(api huma.API, pathPrefix string, registry service.R
 			if updatedTime, err := time.Parse(time.RFC3339, input.UpdatedSince); err == nil {
 				filter.UpdatedSince = &updatedTime
 			} else {
-				reqLog.Finalize(telemetry.Outcome{
-					Level:      zapcore.WarnLevel,
-					StatusCode: http.StatusBadRequest,
-					Error:      err,
-					Message:    "Invalid updated_since format",
+				telemetry.SetOutcome(ctx, telemetry.Outcome{
+					Level:   zapcore.WarnLevel,
+					Error:   err,
+					Message: "Invalid updated_since format",
 				})
 				return nil, huma.Error400BadRequest("Invalid updated_since format: expected RFC3339 timestamp (e.g., 2025-08-07T13:15:04.280Z)")
 			}
@@ -103,10 +97,9 @@ func RegisterAgentsEndpoints(api huma.API, pathPrefix string, registry service.R
 		}
 		if input.Semantic {
 			if strings.TrimSpace(input.Search) == "" {
-				reqLog.Finalize(telemetry.Outcome{
-					Level:      zapcore.WarnLevel,
-					StatusCode: http.StatusBadRequest,
-					Message:    "semantic_search requires search parameter",
+				telemetry.SetOutcome(ctx, telemetry.Outcome{
+					Level:   zapcore.WarnLevel,
+					Message: "semantic_search requires search parameter",
 				})
 				return nil, huma.Error400BadRequest("semantic_search requires the search parameter to be provided", nil)
 			}
@@ -128,19 +121,17 @@ func RegisterAgentsEndpoints(api huma.API, pathPrefix string, registry service.R
 		agents, nextCursor, err := registry.ListAgents(ctx, filter, input.Cursor, input.Limit)
 		if err != nil {
 			if errors.Is(err, database.ErrInvalidInput) {
-				reqLog.Finalize(telemetry.Outcome{
-					Level:      zapcore.WarnLevel,
-					StatusCode: http.StatusBadRequest,
-					Error:      err,
-					Message:    "Invalid input",
+				telemetry.SetOutcome(ctx, telemetry.Outcome{
+					Level:   zapcore.WarnLevel,
+					Error:   err,
+					Message: "Invalid input",
 				})
 				return nil, huma.Error400BadRequest(err.Error(), err)
 			}
-			reqLog.Finalize(telemetry.Outcome{
-				Level:      zapcore.ErrorLevel,
-				StatusCode: http.StatusInternalServerError,
-				Error:      err,
-				Message:    "Failed to get agents list",
+			telemetry.SetOutcome(ctx, telemetry.Outcome{
+				Level:   zapcore.ErrorLevel,
+				Error:   err,
+				Message: "Failed to get agents list",
 			})
 			return nil, huma.Error500InternalServerError("Failed to get agents list", err)
 		}
@@ -155,10 +146,9 @@ func RegisterAgentsEndpoints(api huma.API, pathPrefix string, registry service.R
 			zap.Bool("has_next_page", nextCursor != ""),
 		)
 
-		reqLog.Finalize(telemetry.Outcome{
-			Level:      zapcore.InfoLevel,
-			StatusCode: http.StatusOK,
-			Message:    "Agents list retrieved",
+		telemetry.SetOutcome(ctx, telemetry.Outcome{
+			Level:   zapcore.InfoLevel,
+			Message: "Agents list retrieved",
 		})
 
 		return &Response[agentmodels.AgentListResponse]{

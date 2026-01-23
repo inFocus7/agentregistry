@@ -13,8 +13,10 @@ import (
 )
 
 type requestLoggerKeyType struct{}
+type outcomeHolderKeyType struct{}
 
 var requestLoggerKey = requestLoggerKeyType{}
+var outcomeHolderKey = outcomeHolderKeyType{}
 
 func ContextWithLogger(ctx context.Context, logger *RequestLogger) context.Context {
 	return context.WithValue(ctx, requestLoggerKey, logger)
@@ -25,6 +27,32 @@ func FromContext(ctx context.Context) *RequestLogger {
 		return logger
 	}
 	return newNoOpRequestLogger()
+}
+
+// OutcomeHolder is a mutable container for Outcome that handlers can update.
+// This allows handlers to set custom error messages/levels that middleware will use.
+type OutcomeHolder struct {
+	Outcome *Outcome
+}
+
+func ContextWithOutcomeHolder(ctx context.Context, holder *OutcomeHolder) context.Context {
+	return context.WithValue(ctx, outcomeHolderKey, holder)
+}
+
+// SetOutcome allows handlers to set a custom outcome (message, error, level).
+// The middleware will use this when finalizing the log.
+func SetOutcome(ctx context.Context, outcome Outcome) {
+	if holder, ok := ctx.Value(outcomeHolderKey).(*OutcomeHolder); ok && holder != nil {
+		holder.Outcome = &outcome
+	}
+}
+
+// OutcomeFromContext retrieves the outcome from the holder (if set by handler).
+func OutcomeFromContext(ctx context.Context) *Outcome {
+	if holder, ok := ctx.Value(outcomeHolderKey).(*OutcomeHolder); ok && holder != nil {
+		return holder.Outcome
+	}
+	return nil
 }
 
 // LoggingConfig holds sampling and filtering configuration.
