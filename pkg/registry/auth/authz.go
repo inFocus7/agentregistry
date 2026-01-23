@@ -41,8 +41,6 @@ func (a *Authorizer) Check(ctx context.Context, verb PermissionAction, resource 
 // Once we implement better authN/authZ handling, we'll want to remove these, and just have read-only (above) actions as "public".
 var PublicActions = map[PermissionAction]bool{
 	PermissionActionRead:    true,
-	PermissionActionPull:    true,
-	PermissionActionRun:     true, // local runs
 	PermissionActionPush:    true,
 	PermissionActionPublish: true,
 	// PermissionActionEdit:    true,
@@ -63,7 +61,7 @@ func NewPublicAuthzProvider(jwtManager *JWTManager) *PublicAuthzProvider {
 }
 
 // Check verifies if the session can perform the action on the resource.
-//   - Public actions (read, pull, run) are allowed without authentication
+//   - Public actions (read) are allowed without authentication
 //   - Protected actions (push, publish, edit, delete, deploy) require authentication
 func (o *PublicAuthzProvider) Check(ctx context.Context, s Session, verb PermissionAction, resource Resource) error {
 	// Public actions are allowed without authentication

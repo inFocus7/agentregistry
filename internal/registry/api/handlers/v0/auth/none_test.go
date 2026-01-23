@@ -48,13 +48,11 @@ func TestNoneHandler_GetAnonymousToken(t *testing.T) {
 
 	expectedPermissions := []auth.Permission{
 		{Action: auth.PermissionActionRead, ResourcePattern: "io.modelcontextprotocol.anonymous/*"},
-		{Action: auth.PermissionActionPull, ResourcePattern: "io.modelcontextprotocol.anonymous/*"},
 		{Action: auth.PermissionActionPush, ResourcePattern: "io.modelcontextprotocol.anonymous/*"},
 		{Action: auth.PermissionActionPublish, ResourcePattern: "io.modelcontextprotocol.anonymous/*"},
 		{Action: auth.PermissionActionEdit, ResourcePattern: "io.modelcontextprotocol.anonymous/*"},
 		{Action: auth.PermissionActionDelete, ResourcePattern: "io.modelcontextprotocol.anonymous/*"},
 		{Action: auth.PermissionActionDeploy, ResourcePattern: "io.modelcontextprotocol.anonymous/*"},
-		{Action: auth.PermissionActionRun, ResourcePattern: "io.modelcontextprotocol.anonymous/*"},
 	}
 
 	assert.Equal(t, expectedPermissions, claims.Permissions, "should have all permissions")

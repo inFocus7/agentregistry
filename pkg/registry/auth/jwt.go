@@ -29,12 +29,10 @@ type PermissionAction string
 const (
 	PermissionActionRead    PermissionAction = "read"
 	PermissionActionPush    PermissionAction = "push"
-	PermissionActionPull    PermissionAction = "pull"
 	PermissionActionPublish PermissionAction = "publish"
 	PermissionActionEdit    PermissionAction = "edit"
 	PermissionActionDelete  PermissionAction = "delete"
 	PermissionActionDeploy  PermissionAction = "deploy"
-	PermissionActionRun     PermissionAction = "run"
 )
 
 type Permission struct {
