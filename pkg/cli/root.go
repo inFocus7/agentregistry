@@ -69,9 +69,10 @@ var rootCmd = &cobra.Command{
 					if verbose {
 						fmt.Println("No stored authentication token found. Continuing without authentication.")
 					}
+				} else {
+					// in this case, there is a valid issue with authentication, so block the command execution
+					return fmt.Errorf("CLI authentication failed: %w", err)
 				}
-				// in this case, there is a valid issue with authentication, so block the command execution
-				return fmt.Errorf("CLI authentication failed: %w", err)
 			}
 		}
 
