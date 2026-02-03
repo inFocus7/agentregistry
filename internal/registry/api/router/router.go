@@ -48,7 +48,6 @@ func MetricTelemetryMiddleware(metrics *telemetry.Metrics, options ...Middleware
 	}
 
 	return func(ctx huma.Context, next func(huma.Context)) {
-		fmt.Println("DEBUG: Inside MetricTelemetryMiddleware")
 		path := ctx.URL().Path
 
 		// Skip instrumentation for specified paths
@@ -207,7 +206,6 @@ func NewHumaAPI(cfg *config.Config, registry service.RegistryService, mux *http.
 		// Register UI handler for all non-API routes
 		// This must be registered last so API routes take precedence
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			fmt.Println("DEBUG: Catch-all handler hit for path:", r.URL.Path)
 			// Check if this is an API route - if so, return 404
 			if strings.HasPrefix(r.URL.Path, "/v0/") ||
 				strings.HasPrefix(r.URL.Path, "/v0.1/") ||
@@ -217,7 +215,6 @@ func NewHumaAPI(cfg *config.Config, registry service.RegistryService, mux *http.
 				r.URL.Path == "/ping" ||
 				r.URL.Path == "/metrics" ||
 				strings.HasPrefix(r.URL.Path, "/docs") {
-				fmt.Println("DEBUG: API route not found, returning 404 for:", r.URL.Path)
 				handle404(w, r)
 				return
 			}
@@ -227,14 +224,12 @@ func NewHumaAPI(cfg *config.Config, registry service.RegistryService, mux *http.
 	} else {
 		// If no UI handler, redirect to docs and handle 404
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			fmt.Println("DEBUG: No-UI catch-all handler hit for path:", r.URL.Path)
 			if r.URL.Path == "/" {
 				http.Redirect(w, r, "https://github.com/modelcontextprotocol/registry/tree/main/docs", http.StatusTemporaryRedirect)
 				return
 			}
 
 			// Handle 404 for all other routes
-			fmt.Println("DEBUG: Route not found, returning 404 for:", r.URL.Path)
 			handle404(w, r)
 		})
 	}

@@ -93,16 +93,13 @@ func AuthnMiddleware(authn AuthnProvider, options ...MiddlewareOption) func(ctx 
 		}
 		url := ctx.URL()
 		// is it right to pass ctx.Header? or pass a wrapper like func(name string) string {return ctx.Header(name)}?
-		fmt.Println("DEBUG: Authenticating")
 		session, err := authn.Authenticate(ctx.Context(), ctx.Header, url.Query())
 		if err != nil {
-			fmt.Println("DEBUG: Authentication error", err)
 			ctx.SetStatus(http.StatusUnauthorized)
 			_, _ = ctx.BodyWriter().Write([]byte("Unauthorized"))
 			return
 		}
 		if session != nil {
-			fmt.Println("DEBUG: Authentication successful, storing session", session)
 			ctx = huma.WithContext(ctx, AuthSessionTo(ctx.Context(), session))
 		}
 		next(ctx)
