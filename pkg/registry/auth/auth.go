@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -65,6 +66,7 @@ func WithSkipPaths(paths ...string) MiddlewareOption {
 }
 
 func AuthnMiddleware(authn AuthnProvider, options ...MiddlewareOption) func(ctx huma.Context, next func(huma.Context)) {
+	fmt.Println("DEBUG: Calling AuthnMiddleware", authn)
 	config := &middlewareConfig{
 		skipPaths: make(map[string]bool),
 	}
@@ -72,6 +74,7 @@ func AuthnMiddleware(authn AuthnProvider, options ...MiddlewareOption) func(ctx 
 		option(config)
 	}
 	return func(ctx huma.Context, next func(huma.Context)) {
+		fmt.Println("DEBUG: Inside AuthnMiddleware", authn)
 		path := ctx.URL().Path
 
 		// Skip authentication for specified paths
@@ -89,13 +92,17 @@ func AuthnMiddleware(authn AuthnProvider, options ...MiddlewareOption) func(ctx 
 			return
 		}
 		url := ctx.URL()
+		// is it right to pass ctx.Header? or pass a wrapper like func(name string) string {return ctx.Header(name)}?
+		fmt.Println("DEBUG: Authenticating")
 		session, err := authn.Authenticate(ctx.Context(), ctx.Header, url.Query())
 		if err != nil {
+			fmt.Println("DEBUG: Authentication error", err)
 			ctx.SetStatus(http.StatusUnauthorized)
 			_, _ = ctx.BodyWriter().Write([]byte("Unauthorized"))
 			return
 		}
 		if session != nil {
+			fmt.Println("DEBUG: Authentication successful, storing session", session)
 			ctx = huma.WithContext(ctx, AuthSessionTo(ctx.Context(), session))
 		}
 		next(ctx)
