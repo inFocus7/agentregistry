@@ -11,6 +11,7 @@ import (
 	"github.com/agentregistry-dev/agentregistry/internal/cli/mcp/frameworks"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/mcp/manifest"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/mcp/templates"
+	"github.com/agentregistry-dev/agentregistry/pkg/validators"
 
 	"github.com/spf13/cobra"
 )
@@ -32,6 +33,7 @@ var (
 	initEmail          string
 	initDescription    string
 	initNonInteractive bool
+	initVersion        string
 )
 
 func init() {
@@ -41,6 +43,7 @@ func init() {
 	InitCmd.PersistentFlags().StringVar(&initEmail, "email", "", "Author email for the project")
 	InitCmd.PersistentFlags().StringVar(&initDescription, "description", "", "Description for the project")
 	InitCmd.PersistentFlags().BoolVar(&initNonInteractive, "non-interactive", false, "Run in non-interactive mode")
+	InitCmd.PersistentFlags().StringVar(&initVersion, "version", "0.1.0", "Version for the project (default: 0.1.0)")
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
@@ -55,7 +58,7 @@ func runInitFramework(
 	customizeProjectConfig func(*templates.ProjectConfig) error,
 ) error {
 	// Validate project name
-	if err := validateProjectName(projectName); err != nil {
+	if err := validators.ValidateProjectName(projectName); err != nil {
 		return fmt.Errorf("invalid project name: %w", err)
 	}
 
@@ -72,7 +75,7 @@ func runInitFramework(
 	}
 
 	// Create project manifest
-	projectManifest := manifest.GetDefault(projectName, framework, initDescription, initAuthor, initEmail)
+	projectManifest := manifest.GetDefault(projectName, framework, initDescription, initAuthor, initEmail, initVersion)
 
 	// Check if directory exists
 	projectPath, err := filepath.Abs(projectName)
@@ -113,24 +116,6 @@ func runInitFramework(
 	fmt.Printf("  arctl mcp build %s\n", projectPath)
 
 	return manifest.NewManager(projectPath).Save(projectManifest)
-}
-
-func validateProjectName(name string) error {
-	if name == "" {
-		return fmt.Errorf("project name cannot be empty")
-	}
-
-	// Check for invalid characters
-	if strings.ContainsAny(name, " \t\n\r/\\:*?\"<>|") {
-		return fmt.Errorf("project name contains invalid characters")
-	}
-
-	// Check if it starts with a dot
-	if strings.HasPrefix(name, ".") {
-		return fmt.Errorf("project name cannot start with a dot")
-	}
-
-	return nil
 }
 
 // Prompts for user input

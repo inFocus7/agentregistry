@@ -23,7 +23,7 @@ LDFLAGS := \
 # Local architecture detection to build for the current platform
 LOCALARCH ?= $(shell uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/')
 
-.PHONY: help install-ui build-ui clean-ui build-cli build install dev-ui test test-integration test-coverage test-coverage-report clean fmt lint all release-cli docker-compose-up docker-compose-down docker-compose-logs
+.PHONY: help install-ui build-ui clean-ui build-cli build install dev-ui run down test test-integration test-coverage test-coverage-report clean fmt lint all release-cli docker-compose-up docker-compose-down docker-compose-logs
 
 # Default target
 help:
@@ -34,6 +34,8 @@ help:
 	@echo "  build-cli             - Build the Go CLI"
 	@echo "  build                - Build both UI and Go CLI"
 	@echo "  install              - Install the CLI to GOPATH/bin"
+	@echo "  run                  - Start local dev environment (docker-compose)"
+	@echo "  down                 - Stop local dev environment"
 	@echo "  dev-ui               - Run Next.js in development mode"
 	@echo "  test                 - Run Go unit tests"
 	@echo "  test-integration     - Run Go tests with integration tests"
@@ -43,6 +45,7 @@ help:
 	@echo "  all                  - Clean and build everything"
 	@echo "  fmt                  - Run the formatter"
 	@echo "  lint                 - Run the linter"
+	@echo "  verify               - Verify generated code is up to date"
 	@echo "  release              - Build and release the CLI"
 
 # Install UI dependencies
@@ -103,6 +106,20 @@ install: build
 dev-ui:
 	@echo "Starting Next.js development server..."
 	cd ui && npm run dev
+
+# Start local development environment (docker-compose)
+run: docker-registry docker-compose-up build-cli
+	@echo ""
+	@echo "agentregistry is running:"
+	@echo "  UI:  http://localhost:12121"
+	@echo "  API: http://localhost:12121/v0"
+	@echo "  CLI: ./bin/arctl"
+	@echo ""
+	@echo "To stop: make down"
+
+# Stop local development environment
+down: docker-compose-down
+	@echo "agentregistry stopped"
 
 # Run Go tests (unit tests only)
 test-unit:
@@ -232,6 +249,14 @@ release-cli: bin/arctl-windows-amd64.exe.sha256
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
 	$(GOLANGCI_LINT) run
+
+.PHONY: verify
+verify: mod-tidy ## Run all verification checks
+	git diff --exit-code
+
+.PHONY: mod-tidy
+mod-tidy: ## Run go mod tidy
+	go mod tidy
 
 .PHONY: lint-fix
 lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
