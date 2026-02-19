@@ -28,6 +28,10 @@ type CLIOptions struct {
 
 	// AuthnProviderFactory provides CLI-specific authentication.
 	AuthnProviderFactory types.CLIAuthnProviderFactory
+
+	// OnTokenResolved is called when a token is resolved.
+	// This allows extensions to perform additional actions when a token is resolved (e.g. storing locally).
+	OnTokenResolved func(token string) error
 }
 
 var cliOptions CLIOptions
@@ -87,6 +91,12 @@ var rootCmd = &cobra.Command{
 						}
 					}
 				}
+			}
+		}
+
+		if cliOptions.OnTokenResolved != nil {
+			if err := cliOptions.OnTokenResolved(token); err != nil {
+				return fmt.Errorf("failed to resolve token: %w", err)
 			}
 		}
 
