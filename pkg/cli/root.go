@@ -128,6 +128,29 @@ func resolveRegistryTarget(getEnv func(string) string) (baseURL, token string) {
 	return base, token
 }
 
+// resolveAuthToken resolves the authentication token from the CLI authentication provider.
+func resolveAuthToken(ctx context.Context, cmd *cobra.Command, factory types.CLIAuthnProviderFactory) (string, error) {
+	provider, err := factory(cmd.Root())
+	if err != nil {
+		if errors.Is(err, types.ErrNoOIDCDefined) {
+			return "", nil // non-blocking, user may be running a command that does not require authentication
+		}
+		return "", fmt.Errorf("failed to create CLI authentication provider: %w", err)
+	}
+	if provider == nil {
+		return "", nil // non-blocking, user may be running a command that does not require authentication
+	}
+
+	token, err := provider.Authenticate(ctx)
+	if err != nil {
+		if errors.Is(err, types.ErrCLINoStoredToken) {
+			return "", nil // non-blocking, user may be running a command that does not require authentication
+		}
+		return "", fmt.Errorf("CLI authentication failed: %w", err)
+	}
+	return token, nil
+}
+
 func normalizeBaseURL(raw string) string {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -226,25 +249,12 @@ func preRunSetup(ctx context.Context, cmd *cobra.Command, baseURL, token string,
 
 	// Get authentication token if no token override was provided
 	if token == "" && cliOptions.AuthnProviderFactory != nil {
-		provider, err := cliOptions.AuthnProviderFactory(cmd.Root())
+		resolvedToken, err := resolveAuthToken(ctx, cmd, cliOptions.AuthnProviderFactory)
 		if err != nil {
-			if errors.Is(err, types.ErrNoOIDCDefined) {
-				// non-blocking, user may be running a command that does not require authentication
-			} else {
-				return nil, fmt.Errorf("failed to create CLI authentication provider: %w", err)
-			}
-		} else {
-			if provider != nil {
-				token, err = provider.Authenticate(ctx)
-				if err != nil {
-					if errors.Is(err, types.ErrCLINoStoredToken) {
-						// non-blocking, user may be running a command that does not require authentication
-					} else {
-						return nil, fmt.Errorf("CLI authentication failed: %w", err)
-					}
-				}
-			}
+			return nil, err
 		}
+
+		token = resolvedToken
 	}
 
 	if cliOptions.OnTokenResolved != nil {
