@@ -104,7 +104,7 @@ func handle404(w http.ResponseWriter, r *http.Request) {
 	detail := "Endpoint not found. See /docs for the API documentation."
 
 	// Provide suggestions for common API endpoint mistakes
-	if !strings.HasPrefix(path, "/v0/") && !strings.HasPrefix(path, "/admin/v0/") {
+	if !strings.HasPrefix(path, "/v0/") {
 		detail = fmt.Sprintf(
 			"Endpoint not found. Did you mean '/v0%s'? See /docs for the API documentation.",
 			path,
@@ -172,10 +172,6 @@ func NewHumaAPI(cfg *config.Config, registry service.RegistryService, mux *http.
 			Description: "Authentication operations for obtaining tokens to publish servers",
 		},
 		{
-			Name:        "admin",
-			Description: "Administrative operations for managing servers (requires elevated permissions)",
-		},
-		{
 			Name:        "health",
 			Description: "Health check endpoint for monitoring service availability",
 		},
@@ -199,7 +195,7 @@ func NewHumaAPI(cfg *config.Config, registry service.RegistryService, mux *http.
 		routeOpts.Mux = mux
 	}
 
-	// Register all API routes (public and admin) for all versions
+	// Register all API routes under /v0
 	RegisterRoutes(api, cfg, registry, metrics, versionInfo, routeOpts)
 
 	// Add /metrics for Prometheus metrics using promhttp
@@ -212,7 +208,6 @@ func NewHumaAPI(cfg *config.Config, registry service.RegistryService, mux *http.
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			// Check if this is an API route - if so, return 404
 			if strings.HasPrefix(r.URL.Path, "/v0/") ||
-				strings.HasPrefix(r.URL.Path, "/admin/v0/") ||
 				r.URL.Path == "/health" ||
 				r.URL.Path == "/ping" ||
 				r.URL.Path == "/metrics" ||

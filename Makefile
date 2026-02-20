@@ -23,7 +23,7 @@ LDFLAGS := \
 # Local architecture detection to build for the current platform
 LOCALARCH ?= $(shell uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/')
 
-.PHONY: help install-ui build-ui clean-ui build-cli build install dev-ui run down test test-integration test-coverage test-coverage-report clean fmt lint all release-cli docker-compose-up docker-compose-down docker-compose-logs
+.PHONY: help install-ui build-ui clean-ui build-cli build install dev-ui run down test test-integration test-coverage test-coverage-report clean lint all release-cli docker-compose-up docker-compose-down docker-compose-logs
 
 # Default target
 help:
@@ -43,8 +43,7 @@ help:
 	@echo "  test-coverage-report - Run Go tests with HTML coverage report"
 	@echo "  clean                - Clean all build artifacts"
 	@echo "  all                  - Clean and build everything"
-	@echo "  fmt                  - Run the formatter"
-	@echo "  lint                 - Run the linter"
+	@echo "  lint                 - Run the linter (GOLANGCI_LINT_ARGS=--fix to auto-fix)"
 	@echo "  verify               - Verify generated code is up to date"
 	@echo "  release              - Build and release the CLI"
 
@@ -72,20 +71,18 @@ clean-ui:
 	@echo "UI artifacts cleaned"
 
 # Build the Go CLI
-build-cli:
+build-cli: mod-download
 	@echo "Building Go CLI..."
 	@echo "Downloading Go dependencies..."
-	go mod download
 	@echo "Building binary..."
 	go build -ldflags "$(LDFLAGS)" \
 		-o bin/arctl cmd/cli/main.go
 	@echo "Binary built successfully: bin/arctl"
 
 # Build the Go server (with embedded UI)
-build-server:
+build-server: mod-download
 	@echo "Building Go CLI..."
 	@echo "Downloading Go dependencies..."
-	go mod download
 	@echo "Building binary..."
 	go build -ldflags "$(LDFLAGS)" \
 		-o bin/arctl-server cmd/server/main.go
@@ -151,7 +148,7 @@ clean: clean-ui
 	@echo "All artifacts cleaned"
 
 # Clean and build everything
-all: clean build 
+all: clean build
 	@echo "Clean build complete!"
 
 # Quick development build (skips cleaning)
@@ -159,11 +156,6 @@ dev-build: build-ui
 	@echo "Building Go CLI (development mode)..."
 	go build -o bin/arctl cmd/cli/main.go
 	@echo "Development build complete!"
-
-
-fmt: goimports
-	$(GOIMPORT) -w .
-	@echo "✓ Formatted code"
 
 
 # Build custom agent gateway image with npx/uvx support
@@ -240,15 +232,18 @@ bin/arctl-windows-amd64.exe:
 bin/arctl-windows-amd64.exe.sha256: bin/arctl-windows-amd64.exe
 	sha256sum bin/arctl-windows-amd64.exe > bin/arctl-windows-amd64.exe.sha256
 
-release-cli: bin/arctl-linux-amd64.sha256  
-release-cli: bin/arctl-linux-arm64.sha256  
-release-cli: bin/arctl-darwin-amd64.sha256  
-release-cli: bin/arctl-darwin-arm64.sha256  
+release-cli: bin/arctl-linux-amd64.sha256
+release-cli: bin/arctl-linux-arm64.sha256
+release-cli: bin/arctl-darwin-amd64.sha256
+release-cli: bin/arctl-darwin-arm64.sha256
 release-cli: bin/arctl-windows-amd64.exe.sha256
 
+GOLANGCI_LINT ?= go tool golangci-lint
+GOLANGCI_LINT_ARGS ?= --fix
+
 .PHONY: lint
-lint: golangci-lint ## Run golangci-lint linter
-	$(GOLANGCI_LINT) run
+lint: ## Run golangci-lint linter
+	$(GOLANGCI_LINT) run $(GOLANGCI_LINT_ARGS)
 
 .PHONY: verify
 verify: mod-tidy ## Run all verification checks
@@ -258,50 +253,6 @@ verify: mod-tidy ## Run all verification checks
 mod-tidy: ## Run go mod tidy
 	go mod tidy
 
-.PHONY: lint-fix
-lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
-	$(GOLANGCI_LINT) run --fix
-
-.PHONY: lint-config
-lint-config: golangci-lint ## Verify golangci-lint linter configuration
-	$(GOLANGCI_LINT) config verify
-
-##@ Dependencies
-
-## Location to install dependencies to
-LOCALBIN ?= $(shell pwd)/bin
-$(LOCALBIN):
-	mkdir -p $(LOCALBIN)
-
-
-GOIMPORT = $(LOCALBIN)/goimports
-GOIMPORT_VERSION ?= v0.41
-
-GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
-GOLANGCI_LINT_VERSION ?= v2.8.0
-
-.PHONY: goimports
-goimports: $(GOIMPORT) ## Download goimports locally if necessary.
-$(GOIMPORT): $(LOCALBIN)
-	$(call go-install-tool,$(GOIMPORT),golang.org/x/tools/cmd/goimports,$(GOIMPORT_VERSION))
-
-.PHONY: golangci-lint
-golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
-$(GOLANGCI_LINT): $(LOCALBIN)
-	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
-
-# go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
-# $1 - target path with name of binary
-# $2 - package url which can be installed
-# $3 - specific version of package
-define go-install-tool
-@[ -f "$(1)-$(3)" ] || { \
-set -e; \
-package=$(2)@$(3) ;\
-echo "Downloading $${package}" ;\
-rm -f $(1) || true ;\
-GOBIN=$(LOCALBIN) go install $${package} ;\
-mv $(1) $(1)-$(3) ;\
-} ;\
-ln -sf $(1)-$(3) $(1)
-endef
+.PHONY: mod-download
+mod-download: ## Run go mod download
+	go mod download
