@@ -32,6 +32,14 @@ import {
 
 const GATEWAY_BASE_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:21212"
 
+const STATUS_COLORS: Record<string, string> = {
+  deployed:   'bg-green-500',
+  discovered: 'bg-green-500',
+  deploying:  'bg-amber-500',
+  failed:     'bg-destructive',
+  cancelled:  'bg-muted-foreground',
+}
+
 function sanitizeName(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9-]/g, '-')
 }
@@ -342,13 +350,6 @@ function DeploymentRow({ item, onRemove, removing, copiedAgentId, onCopyAgentUrl
   const [showError, setShowError] = useState(false)
   const hasError = item.status === 'failed'
 
-  const STATUS_COLORS: Record<string, string> = {
-    deployed:   'bg-green-500',
-    discovered: 'bg-green-500',
-    deploying:  'bg-amber-500',
-    failed:     'bg-destructive',
-    cancelled:  'bg-muted-foreground',
-  }
   const statusColor = STATUS_COLORS[item.status] ?? 'bg-muted-foreground'
 
   return (
