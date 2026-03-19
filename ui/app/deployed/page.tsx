@@ -348,7 +348,7 @@ function DeploymentRow({ item, onRemove, removing, copiedAgentId, onCopyAgentUrl
 }) {
   const isAgent = item.resourceType === 'agent'
   const [showError, setShowError] = useState(false)
-  const hasError = item.status === 'failed'
+  const hasError = Boolean(item.error)
 
   const statusColor = STATUS_COLORS[item.status] ?? 'bg-muted-foreground'
 
@@ -368,7 +368,7 @@ function DeploymentRow({ item, onRemove, removing, copiedAgentId, onCopyAgentUrl
                 />
               </TooltipTrigger>
               <TooltipContent side="right">
-                <p>{item.status}{item.error ? ' — click to show error' : ''}</p>
+                <p>{item.status}{hasError ? ' — click to show error' : ''}</p>
               </TooltipContent>
             </Tooltip>
             <h3 className="text-lg font-semibold">{item.serverName}</h3>
