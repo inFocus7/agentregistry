@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/agentregistry-dev/agentregistry/internal/cli/common"
+	"github.com/agentregistry-dev/agentregistry/pkg/cli/annotations"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/common/docker"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/mcp/build"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/mcp/manifest"
@@ -13,8 +14,9 @@ import (
 )
 
 var BuildCmd = &cobra.Command{
-	Use:   "build",
-	Short: "Build MCP server as a Docker image",
+	Use:         "build",
+	Annotations: map[string]string{annotations.SkipDaemonAnnotation: "true"},
+	Short:       "Build MCP server as a Docker image",
 	Long: `Build an MCP server from the current project.
 	
 This command will detect the project type and build the appropriate

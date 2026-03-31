@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/agentregistry-dev/agentregistry/internal/cli/mcp/frameworks"
+	"github.com/agentregistry-dev/agentregistry/pkg/cli/annotations"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/mcp/manifest"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/mcp/templates"
 	"github.com/agentregistry-dev/agentregistry/pkg/validators"
@@ -17,8 +18,9 @@ import (
 )
 
 var InitCmd = &cobra.Command{
-	Use:   "init [project-type] [project-name]",
-	Short: "Initialize a new MCP server project",
+	Use:         "init [project-type] [project-name]",
+	Annotations: map[string]string{annotations.SkipDaemonAnnotation: "true"},
+	Short:       "Initialize a new MCP server project",
 	Long: `Initialize a new MCP server project with dynamic tool loading.
 
 This command provides subcommands to initialize a new MCP server project

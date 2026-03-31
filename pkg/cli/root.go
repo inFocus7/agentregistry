@@ -9,6 +9,7 @@ import (
 
 	"github.com/agentregistry-dev/agentregistry/internal/cli"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/agent"
+	"github.com/agentregistry-dev/agentregistry/pkg/cli/annotations"
 	agentutils "github.com/agentregistry-dev/agentregistry/internal/cli/agent/utils"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/configure"
 	clidaemon "github.com/agentregistry-dev/agentregistry/internal/cli/daemon"
@@ -149,40 +150,20 @@ func normalizeBaseURL(raw string) string {
 	return "http://" + trimmed
 }
 
-// preRunSkipCommands defines which commands skip pre-run setup (no API client needed).
-// Key: parent name; value: set of subcommand names that skip setup.
-var preRunSkipCommands = map[string]map[string]bool{
-	"arctl": {
-		"completion": true,
-		"configure":  true,
-		"version":    true,
-	},
-	"agent": {
-		"build": true,
-		"init":  true,
-	},
-	"mcp": {
-		"add-tool": true,
-		"build":    true,
-		"init":     true,
-	},
-	"skill": {
-		"build": true,
-		"init":  true,
-	},
-}
-
-// preRunBehavior returns whether to skip pre-run setup (e.g. agent/mcp/skill init).
+// preRunBehavior returns whether to skip pre-run setup by walking the command
+// hierarchy for the annotations.SkipDaemonAnnotation. Any ancestor having the annotation
+// causes all descendants to skip as well. Cobra's auto-generated "completion"
+// command cannot be annotated, so it is handled as a special case.
 func preRunBehavior(cmd *cobra.Command) (skipSetup bool) {
 	if cmd == nil {
 		return false
 	}
 	for c := cmd; c != nil; c = c.Parent() {
-		parent := c.Parent()
-		if parent == nil {
-			break
+		if c.Annotations[annotations.SkipDaemonAnnotation] == "true" {
+			return true
 		}
-		if subcommands, ok := preRunSkipCommands[parent.Name()]; ok && subcommands[c.Name()] {
+		// Cobra's auto-generated completion command cannot be annotated.
+		if c.Name() == "completion" && c.Parent() != nil && c.Parent().Name() == "arctl" {
 			return true
 		}
 	}
