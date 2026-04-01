@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 
 	"github.com/agentregistry-dev/agentregistry/internal/cli/common"
-	"github.com/agentregistry-dev/agentregistry/pkg/cli/annotations"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/common/docker"
+	"github.com/agentregistry-dev/agentregistry/pkg/cli/annotations"
 	"github.com/agentregistry-dev/agentregistry/pkg/printer"
 	"github.com/spf13/cobra"
 )

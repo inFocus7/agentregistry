@@ -29,8 +29,8 @@ var ConfigureCmd = &cobra.Command{
 	Use:         "configure [client-name]",
 	Annotations: map[string]string{annotations.SkipDaemonAnnotation: "true"},
 	Short:       "Configure a client",
-	Long:  `Creates the .json configuration for each client, so it can connect to arctl.`,
-	Args:  cobra.MaximumNArgs(1),
+	Long:        `Creates the .json configuration for each client, so it can connect to arctl.`,
+	Args:        cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		// Show supported clients if no argument provided
 		if len(args) == 0 {

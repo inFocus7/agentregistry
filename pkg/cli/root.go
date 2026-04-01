@@ -9,7 +9,6 @@ import (
 
 	"github.com/agentregistry-dev/agentregistry/internal/cli"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/agent"
-	"github.com/agentregistry-dev/agentregistry/pkg/cli/annotations"
 	agentutils "github.com/agentregistry-dev/agentregistry/internal/cli/agent/utils"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/configure"
 	clidaemon "github.com/agentregistry-dev/agentregistry/internal/cli/daemon"
@@ -18,6 +17,7 @@ import (
 	"github.com/agentregistry-dev/agentregistry/internal/cli/prompt"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/skill"
 	"github.com/agentregistry-dev/agentregistry/internal/client"
+	"github.com/agentregistry-dev/agentregistry/pkg/cli/annotations"
 	"github.com/agentregistry-dev/agentregistry/pkg/daemon/dockercompose"
 	"github.com/agentregistry-dev/agentregistry/pkg/types"
 	"github.com/spf13/cobra"

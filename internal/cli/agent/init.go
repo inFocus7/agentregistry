@@ -8,8 +8,8 @@ import (
 
 	"github.com/agentregistry-dev/agentregistry/internal/cli/agent/frameworks"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/agent/frameworks/common"
-	"github.com/agentregistry-dev/agentregistry/pkg/cli/annotations"
 	"github.com/agentregistry-dev/agentregistry/internal/version"
+	"github.com/agentregistry-dev/agentregistry/pkg/cli/annotations"
 	"github.com/agentregistry-dev/agentregistry/pkg/validators"
 	"github.com/spf13/cobra"
 )

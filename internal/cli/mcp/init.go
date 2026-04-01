@@ -9,9 +9,9 @@ import (
 	"strings"
 
 	"github.com/agentregistry-dev/agentregistry/internal/cli/mcp/frameworks"
-	"github.com/agentregistry-dev/agentregistry/pkg/cli/annotations"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/mcp/manifest"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/mcp/templates"
+	"github.com/agentregistry-dev/agentregistry/pkg/cli/annotations"
 	"github.com/agentregistry-dev/agentregistry/pkg/validators"
 
 	"github.com/spf13/cobra"

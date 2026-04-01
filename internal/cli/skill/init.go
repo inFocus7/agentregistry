@@ -15,8 +15,8 @@ var InitCmd = &cobra.Command{
 	Use:         "init [skill-name]",
 	Annotations: map[string]string{annotations.SkipDaemonAnnotation: "true"},
 	Short:       "Initialize a new agentic skill project",
-	Long:  `Initialize a new agentic skill project.`,
-	RunE:  runInit,
+	Long:        `Initialize a new agentic skill project.`,
+	RunE:        runInit,
 }
 
 var (
