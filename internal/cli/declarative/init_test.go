@@ -1,8 +1,10 @@
 package declarative_test
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -109,6 +111,62 @@ func TestInitAgent_ModelProviderFlagFlowsToArctlYAML(t *testing.T) {
 	spec := readYAMLFile(t, filepath.Join(projectDir, "agent.yaml"))["spec"].(map[string]any)
 	assert.Equal(t, "openai", spec["modelProvider"])
 	assert.Equal(t, "gpt4", spec["modelName"])
+}
+
+func TestInitAgent_SpecialCharacterName_SanitizesPythonPackage(t *testing.T) {
+	tmp := t.TempDir()
+	origDir, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(tmp))
+	defer func() { _ = os.Chdir(origDir) }()
+
+	cmd := declarative.NewInitCmd()
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetArgs([]string{"agent", "solo-io.agent", "--framework", "adk", "--language", "python"})
+	require.NoError(t, cmd.Execute())
+
+	projectDir := filepath.Join(tmp, "solo-io.agent")
+
+	agentFilePath := filepath.Join(projectDir, "solo_io_agent")
+	assert.DirExists(t, agentFilePath)
+	assert.NoDirExists(t, filepath.Join(projectDir, "solo-io.agent"))
+
+	agentPy, err := os.ReadFile(filepath.Join(agentFilePath, "agent.py"))
+	require.NoError(t, err)
+	assert.Contains(t, string(agentPy), `name="solo_io_agent_agent"`)
+
+	dockerfile, err := os.ReadFile(filepath.Join(projectDir, "Dockerfile"))
+	require.NoError(t, err)
+	assert.Contains(t, string(dockerfile), "COPY solo_io_agent/ solo_io_agent/")
+	assert.Contains(t, string(dockerfile), `CMD ["solo_io_agent"]`)
+
+	compose, err := os.ReadFile(filepath.Join(projectDir, "docker-compose.yaml"))
+	require.NoError(t, err)
+	assert.Contains(t, string(compose), `command: ["solo_io_agent", "--local"]`)
+	assert.Contains(t, string(compose), "source: ./solo_io_agent")
+
+	declarativeAgent := readYAMLFile(t, filepath.Join(projectDir, "agent.yaml"))
+	metadata := declarativeAgent["metadata"].(map[string]any)
+	assert.Equal(t, "solo-io.agent", metadata["name"])
+
+	assert.Contains(t, stdout.String(), `Note: Python package will be named "solo_io_agent" (sanitized from "solo-io.agent").`)
+}
+
+func TestInitAgent_PlainName_NoSanitizationNotice(t *testing.T) {
+	tmp := t.TempDir()
+	origDir, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(tmp))
+	defer func() { _ = os.Chdir(origDir) }()
+
+	cmd := declarative.NewInitCmd()
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetArgs([]string{"agent", "myagent", "--framework", "adk", "--language", "python"})
+	require.NoError(t, cmd.Execute())
+
+	assert.False(t, strings.Contains(stdout.String(), "Python package will be named"))
 }
 
 // ---- init mcp ----

@@ -10,7 +10,7 @@ arctl build summarizer/ --push    # optional: build and push Docker image
 arctl apply -f summarizer/agent.yaml
 ```
 
-`arctl init agent NAME` and `arctl init mcp NAME` pick a framework + language interactively unless `--framework` and `--language` are provided. Run `arctl init agent NAME` (or `arctl init mcp NAME`) on its own to see the available choices. All resource `metadata.name` values (Agent, Skill, Prompt, Deployment, MCPServer) must be DNS-1123 subdomain: lowercase alphanumeric, hyphens, and dots; max 253 chars; each dot-separated segment must start and end with alphanumeric (max 63 chars per segment). Examples: `my-server`, `io.example.mcp`. Agent names additionally cannot contain hyphens or dots and cannot collide with Python keywords (`class`, `import`, `return`, …) because they become Python identifiers in generated code.
+`arctl init agent NAME` and `arctl init mcp NAME` pick a framework + language interactively unless `--framework` and `--language` are provided. Run `arctl init agent NAME` (or `arctl init mcp NAME`) on its own to see the available choices. All resource `metadata.name` values (Agent, Skill, Prompt, Deployment, MCPServer) must be DNS-1123 subdomain: lowercase alphanumeric, hyphens, and dots; max 253 chars; each dot-separated segment must start and end with alphanumeric (max 63 chars per segment). Examples: `my-server`, `io.example.mcp`. Agent names additionally cannot collide with Python keywords (`class`, `import`, `return`, …), because they're used as Python identifiers in generated code. Hyphens and dots are allowed, but are sanitized to underscores in the generated Python package directory (e.g. `my-agent` -> package `my_agent/`).
 
 ## Tags And Mutable Objects
 

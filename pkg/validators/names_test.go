@@ -46,34 +46,30 @@ func TestValidateAgentName(t *testing.T) {
 		input   string
 		wantErr bool
 	}{
-		// Valid cases - lowercase letters and digits only, starts with letter, min 2 chars
 		{"valid simple", "myagent", false},
 		{"valid alphanumeric", "agent123", false},
 		{"valid two chars", "ab", false},
+		{"valid single char", "a", false},
+		{"valid hyphen", "my-agent", false},
+		{"valid dotted reverse-DNS", "io.example.agent", false},
+		{"keyword-prefixed hyphenated", "class-helper", false},
 
-		// Invalid - uppercase not allowed
 		{"mixed case rejected", "MyAgent2", true},
-
-		// Invalid - special characters not allowed
-		{"hyphen not allowed", "my-agent", true},
-		{"dot not allowed", "my.agent", true},
 		{"underscore not allowed", "my_agent", true},
 		{"contains slash", "my/agent", true},
 		{"contains space", "my agent", true},
-
-		// Invalid - must start with letter
-		{"starts with number", "123agent", true},
+		{"leading digit rejected", "1agent", true},
 		{"starts with dot", ".agent", true},
 		{"starts with hyphen", "-agent", true},
-
-		// Invalid - too short
-		{"single char", "a", true},
+		{"trailing hyphen", "agent-", true},
+		{"trailing dot", "agent.", true},
+		{"double dot", "foo..bar", true},
 		{"empty", "", true},
 
-		// CLI-only: Python keywords are rejected even though they're DNS-1123 valid
 		{"python keyword class", "class", true},
 		{"python keyword import", "import", true},
 		{"python keyword return", "return", true},
+		{"python keyword def", "def", true},
 	}
 
 	for _, tt := range tests {

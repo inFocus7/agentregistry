@@ -124,6 +124,24 @@ func TestInitAgent_MCP_SourceRef_NoEnvWrite(t *testing.T) {
 	assert.Contains(t, string(agentYAML), "name: acme-source")
 }
 
+func TestPyName(t *testing.T) {
+	tests := []struct {
+		in, want string
+	}{
+		{"myagent", "myagent"},
+		{"my-agent", "my_agent"},
+		{"io.example.app", "io_example_app"},
+		{"mixed-and.dotted", "mixed_and_dotted"},
+		{"a", "a"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			assert.Equal(t, tt.want, pyName(tt.in))
+		})
+	}
+}
+
 func TestInitAgent_MCP_RegistryFailure_NoPartialWrites(t *testing.T) {
 	dir := t.TempDir()
 	prev := mcpFetcherForTest

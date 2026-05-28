@@ -184,6 +184,10 @@ init and add an MCP_SERVERS_CONFIG entry, e.g.:
 				name = typed
 			}
 
+			if sanitized := pyName(name); sanitized != name {
+				fmt.Fprintf(cmd.OutOrStdout(), "Note: Python package will be named %q (sanitized from %q).\n", sanitized, name)
+			}
+
 			projectDir, err := resolveInitProjectPath(cmd, name)
 			if err != nil {
 				return err
@@ -529,6 +533,7 @@ func agentTemplateVars(name, description, modelProvider, modelName, image, frame
 	mn := modelName
 	return map[string]any{
 		"Name":                  name,
+		"PyName":                pyName(name),
 		"Description":           description,
 		"ModelProvider":         mp,
 		"ModelName":             mn,
@@ -544,6 +549,12 @@ func agentTemplateVars(name, description, modelProvider, modelName, image, frame
 		"HasSkills":             false,
 		"Targets":               []struct{}{},
 	}
+}
+
+// pyName sanitizes a validated agent name (DNS-subdomain) into a Python identifier:
+// collapses '-' and '.' to '_'.
+func pyName(name string) string {
+	return strings.NewReplacer("-", "_", ".", "_").Replace(name)
 }
 
 // loadFrameworkRegistry centralizes the standard load order for arctl commands.

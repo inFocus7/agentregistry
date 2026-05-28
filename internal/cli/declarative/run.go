@@ -19,6 +19,7 @@ import (
 	"github.com/agentregistry-dev/agentregistry/internal/cli/declarative/chat"
 	"github.com/agentregistry-dev/agentregistry/internal/cli/frameworks"
 	"github.com/agentregistry-dev/agentregistry/pkg/api/v1alpha1"
+	"github.com/agentregistry-dev/agentregistry/pkg/cli/annotations"
 )
 
 // RunCmd is the cobra command for "run".
@@ -41,6 +42,9 @@ func newRunCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run [DIRECTORY]",
 		Short: "Run the agent or MCP server in the current directory",
+		Annotations: map[string]string{
+			annotations.AnnotationOptionalRegistry: "true",
+		},
 		Long: `Run the agent or MCP server defined by the declarative YAML in the
 project directory (defaults to ".").
 
