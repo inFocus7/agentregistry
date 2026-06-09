@@ -20,6 +20,7 @@ package resource
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -164,6 +165,12 @@ type Config struct {
 	// new caller.
 	ListFilter func(ctx context.Context, in AuthorizeInput) (extraWhere string, extraArgs []any, err error)
 
+	// EnableOriginFilter exposes ?origin=managed|discovered on list routes
+	// for kinds that distinguish registry-managed rows from provider-discovered
+	// rows materialized into the same Store. Leave false for regular resource
+	// lists.
+	EnableOriginFilter bool
+
 	// IncludeTerminatingByDefault, when true, makes the list handler
 	// surface rows with deletion_timestamp set even if the caller
 	// hasn't passed ?includeTerminating=true. Used by kinds whose
@@ -255,7 +262,9 @@ type deleteMutableInput struct {
 	Name      string `path:"name"`
 }
 
-type listInput struct {
+// ListInput defines the common list query parameters used by Huma route inputs.
+// It is exported so Huma can reflect it when embedded by route-specific inputs.
+type ListInput struct {
 	// Namespace scopes the list. Empty / missing → "default";
 	// literal "all" → cross-namespace.
 	Namespace  string `query:"namespace" doc:"Namespace (defaults to 'default'; 'all' lists across all namespaces)."`
@@ -267,6 +276,16 @@ type listInput struct {
 	// IncludeTerminating surfaces soft-deleted rows (deletionTimestamp != nil)
 	// which are hidden by default.
 	IncludeTerminating bool `query:"includeTerminating" doc:"Include rows with a deletionTimestamp."`
+}
+
+type listInput = ListInput
+
+type listWithOriginInput struct {
+	ListInput
+
+	// Origin filters Deployment-like resources by their source. Empty includes
+	// both managed and persisted discovered rows where the route supports them.
+	Origin string `query:"origin" doc:"Deployment origin filter: managed or discovered."`
 }
 
 type bodyOutput[T v1alpha1.Object] struct {
@@ -307,28 +326,21 @@ func Register[T v1alpha1.Object](api huma.API, cfg Config, newObj func() T) {
 	itemTagPath := itemPath + "/{tag}"
 
 	// List: `/v0/{plural}?namespace=default` (or ?namespace=all).
-	huma.Register(api, huma.Operation{
+	listOperation := huma.Operation{
 		OperationID: "list-" + plural,
 		Method:      http.MethodGet,
 		Path:        listPath,
 		Summary:     fmt.Sprintf("List %s (scoped by ?namespace)", kind),
-	}, func(ctx context.Context, in *listInput) (*listOutput[T], error) {
-		ns := resolveNamespace(in.Namespace, true)
-		if cfg.Authorize != nil {
-			if err := cfg.Authorize(ctx, AuthorizeInput{Verb: "list", Kind: kind, Namespace: ns}); err != nil {
-				return nil, err
-			}
-		}
-		return runList(ctx, cfg, newObj, listParams{
-			Namespace:          ns,
-			Labels:             in.Labels,
-			Limit:              in.Limit,
-			Cursor:             in.Cursor,
-			Tag:                in.Tag,
-			LatestOnly:         in.LatestOnly,
-			IncludeTerminating: in.IncludeTerminating,
+	}
+	if cfg.EnableOriginFilter {
+		huma.Register(api, listOperation, func(ctx context.Context, in *listWithOriginInput) (*listOutput[T], error) {
+			return handleList(ctx, cfg, newObj, in.ListInput, in.Origin)
 		})
-	})
+	} else {
+		huma.Register(api, listOperation, func(ctx context.Context, in *listInput) (*listOutput[T], error) {
+			return handleList(ctx, cfg, newObj, *in, "")
+		})
+	}
 
 	// Get latest (name only; namespace via query).
 	huma.Register(api, huma.Operation{
@@ -680,6 +692,28 @@ type listParams struct {
 	Tag                string
 	LatestOnly         bool
 	IncludeTerminating bool
+	Origin             string
+}
+
+func handleList[T v1alpha1.Object](
+	ctx context.Context, cfg Config, newObj func() T, in listInput, origin string,
+) (*listOutput[T], error) {
+	ns := resolveNamespace(in.Namespace, true)
+	if cfg.Authorize != nil {
+		if err := cfg.Authorize(ctx, AuthorizeInput{Verb: "list", Kind: cfg.Kind, Namespace: ns}); err != nil {
+			return nil, err
+		}
+	}
+	return runList(ctx, cfg, newObj, listParams{
+		Namespace:          ns,
+		Labels:             in.Labels,
+		Limit:              in.Limit,
+		Cursor:             in.Cursor,
+		Tag:                in.Tag,
+		LatestOnly:         in.LatestOnly,
+		IncludeTerminating: in.IncludeTerminating,
+		Origin:             origin,
+	})
 }
 
 // runList is the shared list body used by both the cross-namespace and
@@ -687,6 +721,12 @@ type listParams struct {
 func runList[T v1alpha1.Object](
 	ctx context.Context, cfg Config, newObj func() T, p listParams,
 ) (*listOutput[T], error) {
+	switch p.Origin {
+	case "", "managed", "discovered":
+	default:
+		return nil, huma.Error400BadRequest("invalid origin filter: expected managed or discovered")
+	}
+
 	opts := v1alpha1store.ListOpts{
 		Namespace:          p.Namespace,
 		Limit:              p.Limit,
@@ -710,6 +750,7 @@ func runList[T v1alpha1.Object](
 		opts.ExtraWhere = extra
 		opts.ExtraArgs = extraArgs
 	}
+	applyOriginFilter(&opts, p.Origin)
 	rows, nextCursor, err := cfg.Store.List(ctx, opts)
 	if err != nil {
 		if errors.Is(err, v1alpha1store.ErrInvalidCursor) {
@@ -729,6 +770,38 @@ func runList[T v1alpha1.Object](
 	out.Body.Items = items
 	out.Body.NextCursor = nextCursor
 	return out, nil
+}
+
+func applyOriginFilter(opts *v1alpha1store.ListOpts, origin string) {
+	if opts == nil {
+		return
+	}
+	var predicate string
+	switch origin {
+	case v1alpha1.DeploymentOriginManaged:
+		predicate = "NOT (annotations @> $%d::jsonb)"
+	case v1alpha1.DeploymentOriginDiscovered:
+		predicate = "annotations @> $%d::jsonb"
+	default:
+		return
+	}
+	originSelector, err := json.Marshal(map[string]string{
+		v1alpha1.DeploymentOriginAnnotation: v1alpha1.DeploymentOriginDiscovered,
+	})
+	if err != nil {
+		return
+	}
+	appendExtraWhere(opts, predicate, originSelector)
+}
+
+func appendExtraWhere(opts *v1alpha1store.ListOpts, predicateFormat string, arg any) {
+	opts.ExtraArgs = append(opts.ExtraArgs, arg)
+	predicate := fmt.Sprintf(predicateFormat, len(opts.ExtraArgs))
+	if opts.ExtraWhere == "" {
+		opts.ExtraWhere = predicate
+		return
+	}
+	opts.ExtraWhere = "(" + opts.ExtraWhere + ") AND (" + predicate + ")"
 }
 
 // mapNotFound converts a pkgdb.ErrNotFound error into a Huma 404 with a

@@ -82,18 +82,19 @@ func Register(
 			return resource.Config{}, false
 		}
 		return resource.Config{
-			Kind:              kind,
-			BasePrefix:        basePrefix,
-			Store:             store,
-			Resolver:          resolver,
-			RegistryValidator: registryValidator,
-			Authorize:         perKind.Authorizers[kind],
-			ListFilter:        perKind.ListFilters[kind],
-			PostUpsert:        perKind.PostUpserts[kind],
-			PostDelete:        perKind.PostDeletes[kind],
-			Prepare:           perKind.Prepares[kind],
-			DeleteAdmission:   deleteAdmission,
-			InitialFinalizers: perKind.InitialFinalizers[kind],
+			Kind:               kind,
+			BasePrefix:         basePrefix,
+			Store:              store,
+			Resolver:           resolver,
+			RegistryValidator:  registryValidator,
+			Authorize:          perKind.Authorizers[kind],
+			ListFilter:         perKind.ListFilters[kind],
+			EnableOriginFilter: kind == v1alpha1.KindDeployment,
+			PostUpsert:         perKind.PostUpserts[kind],
+			PostDelete:         perKind.PostDeletes[kind],
+			Prepare:            perKind.Prepares[kind],
+			DeleteAdmission:    deleteAdmission,
+			InitialFinalizers:  perKind.InitialFinalizers[kind],
 		}, true
 	}
 

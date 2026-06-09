@@ -272,10 +272,11 @@ func buildRouteOptions(
 	}
 
 	if stores != nil {
-		routeOpts.DeploymentLogResolver = deploymentsvc.NewAdapterResolver(deploymentsvc.ResolverDependencies{
+		adapterResolver := deploymentsvc.NewAdapterResolver(deploymentsvc.ResolverDependencies{
 			Adapters: adapters,
 			Getter:   internaldb.NewGetter(stores),
 		})
+		routeOpts.DeploymentLogResolver = adapterResolver
 	}
 
 	return routeOpts
@@ -345,6 +346,9 @@ func crudPerKindHooks(options types.AppOptions) crud.PerKindHooks {
 		var finalizers []string
 		if previousDeploymentFinalizers != nil {
 			finalizers = previousDeploymentFinalizers(obj)
+		}
+		if deployment, ok := obj.(*v1alpha1.Deployment); ok && v1alpha1.IsDiscoveredDeployment(deployment) {
+			return finalizers
 		}
 		if slices.Contains(finalizers, controller.DeploymentControllerFinalizer) {
 			return finalizers
